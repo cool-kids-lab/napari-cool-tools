@@ -1,0 +1,11 @@
+name: napari-cool-tools-matfile
+display_name: COOL lab Matfile IO tools
+contributions:
+  commands:
+    - id: napari-cool-tools-matfile.load_segmentation_data
+      python_name: napari_cool_tools_matfile._loader:load_segmentation_data
+      title: Open Matfile Segmentation Data
+  widgets:
+    - command: napari-cool-tools-matfile.load_segmentation_data
+      display_name: Open Matfile Segmentation Data
+      autogenerate: false

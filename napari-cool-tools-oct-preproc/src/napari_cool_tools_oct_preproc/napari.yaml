@@ -1,0 +1,47 @@
+name: napari-cool-tools-oct-preproc
+display_name: COOL Tools OCT Preprocessing 
+contributions:
+  commands:
+    - id: napari-cool-tools-oct-preproc.preproc_bscan
+      title: Preprocess Bscan
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:preproc_bscan_plugin
+    - id: napari-cool-tools-oct-preproc.generate_enface
+      title: Generate Enface from OCT
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:generate_enface_plugin
+    - id: napari-cool-tools-oct-preproc.augmentation
+      title: Augment Data
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:data_augmentation_plugin
+    - id: napari-cool-tools-oct-preproc.octa_gen
+      title: Generate OCTA Data
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:generate_octa_plugin
+    - id: napari-cool-tools-oct-preproc.proc_bscan
+      title: Process Bscan
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:process_bscan_preset
+    - id: napari-cool-tools-oct-preproc.annotate_pre
+      title: Annotation Preprocessing
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:annotation_preset
+    - id: napari-cool-tools-oct-preproc.resize_image
+      title: Annotation Preprocessing
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:resize_image_plugin
+  widgets:
+    - command: napari-cool-tools-oct-preproc.preproc_bscan
+      display_name: Preprocess Bscan
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.generate_enface
+      display_name: Generate Enface
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.augmentation
+      display_name: Augment Data
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.octa_gen
+      display_name: Generate OCTA Data
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.proc_bscan
+      display_name: Process Bscan
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.annotate_pre
+      display_name: Annotation Preprocessing
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.resize_image
+      display_name: Resize Image
+      autogenerate: true

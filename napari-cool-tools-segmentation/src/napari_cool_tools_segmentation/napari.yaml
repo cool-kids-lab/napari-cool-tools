@@ -1,0 +1,35 @@
+name: napari-cool-tools-segmentation
+display_name: COOL Tools Segmentation
+contributions:
+  commands:
+    - id: napari-cool-tools-segmentation.pix2pix_inference_bscan
+      title: Pix2pixHD B-scan Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:b_scan_pix2pixHD_seg
+    - id: napari-cool-tools-segmentation.unet_inference_enface
+      title: Unet++ Enface Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:enface_unet_seg
+    - id: napari-cool-tools-segmentation.onnx_bscan_seg
+      title: ONNX B-scan Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:bscan_onnx_seg_plugin
+    - id: napari-cool-tools-segmentation.onnx_enface_seg
+      title: ONNX Enface Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:enface_onnx_seg_plugin
+    - id: napari-cool-tools-segmentation.popcorn_enface_seg
+      title: Popcorn Enface Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:enface_popcorn_seg_func
+  widgets:
+    - command: napari-cool-tools-segmentation.pix2pix_inference_bscan
+      display_name: Pix2pix B-scan Seg
+      autogenerate: false
+    - command: napari-cool-tools-segmentation.unet_inference_enface
+      display_name: Unet Enface Segmentation
+      autogenerate: false
+    - command: napari-cool-tools-segmentation.onnx_bscan_seg
+      display_name: ONNX B-scan Segmentation
+      autogenerate: false
+    - command: napari-cool-tools-segmentation.onnx_enface_seg
+      display_name: ONNX Enface Segmentation
+      autogenerate: false
+    - command: napari-cool-tools-segmentation.popcorn_enface_seg
+      display_name: Popcorn Enface Segmentation
+      autogenerate: false

@@ -1,0 +1,118 @@
+name: napari-cool-tools-img-proc
+display_name: Napari B-scan/Image Processing 
+contributions:
+  commands:
+    - id: napari-cool-tools-img-proc.init_bscan_preproc
+      title: Initial Bscan Preprocessing
+      python_name: napari_cool_tools_img_proc._equalization:init_bscan_preproc_plugin
+      category: Image Processing
+    - id: napari-cool-tools-img-proc.background_removal
+      title: Background Removal
+      python_name: napari_cool_tools_img_proc._equalization:background_removal_plugin
+      category: Image Processing
+    - id: napari-cool-tools-img-proc.diff_of_gaus
+      title: Band-pass (Difference of Gaussian)
+      python_name: napari_cool_tools_img_proc._denoise:diff_of_gaus_plugin
+    - id: napari-cool-tools-img-proc.normalize
+      python_name: napari_cool_tools_img_proc._normalization:normalize_in_range
+      title: Normailze Values to Range
+    - id: napari-cool-tools-img-proc.standardize
+      python_name: napari_cool_tools_img_proc._normalization:standardize_image_plugin
+      title: Standardize Image
+    - id: napari-cool-tools-img-proc.adjust_gamma
+      python_name: napari_cool_tools_img_proc._luminance:adjust_gamma
+      title: Gamma Adjustment
+    - id: napari-cool-tools-img-proc.adjust_log
+      python_name: napari_cool_tools_img_proc._luminance:adjust_log
+      title: Log Adjustment
+    - id: napari-cool-tools-img-proc.clahe
+      title: Contrast Limited Adaptive Histogram Equalization
+      python_name: napari_cool_tools_img_proc._equalization:clahe
+    - id: napari-cool-tools-img-proc.match_histogram
+      title: Match Histograms
+      python_name: napari_cool_tools_img_proc._equalization:match_histogram
+    - id: napari-cool-tools-img-proc.denoise_tv
+      title: Total Variation Denoising (Chambolle)
+      python_name: napari_cool_tools_img_proc._denoise:denoise_tv_plugin
+    - id: napari-cool-tools-img-proc.bilateral
+      title: Bilateral Filter
+      python_name: napari_cool_tools_img_proc._filters:filter_bilateral
+    - id: napari-cool-tools-img-proc.unsharp
+      title: Sharpen (Unsharp Mask)
+      python_name: napari_cool_tools_img_proc._filters:sharpen_um
+    - id: napari-cool-tools-img-proc.median
+      title: Median Blur
+      python_name: napari_cool_tools_img_proc._filters:filter_median
+    - id: napari-cool-tools-img-proc.gblur
+      title: Gaussian Blur
+      python_name: napari_cool_tools_img_proc._filters:filter_gaussian_blur_plg
+    - id: napari-cool-tools-img-proc.pad2D
+      title: Pad 2D
+      python_name: napari_cool_tools_img_proc._nn_tools_2D:pad_image2D_plg
+    - id: napari-cool-tools-img-proc.pooling
+      title: Pooling 2D
+      python_name: napari_cool_tools_img_proc._nn_tools_2D:pool_2D_plg
+    - id: napari-cool-tools-img-proc.morph_dialtion
+      title: Dilation(Morph)
+      python_name: napari_cool_tools_img_proc._morphology:morphological_dilation_plugin
+      category: Morphology
+    - id: napari-cool-tools-img-proc.morph_erosion
+      title: Erosion(Morph)
+      python_name: napari_cool_tools_img_proc._morphology:morphological_erosion_plugin
+      category: Morphology
+
+  widgets:
+    - command: napari-cool-tools-img-proc.init_bscan_preproc
+      display_name: Initial Bscan Preprocessing
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.background_removal
+      display_name: Background Removal
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.diff_of_gaus
+      display_name: Band-pass (DoG)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.normalize
+      autogenerate: true
+      display_name: Normalize (Range)
+    - command: napari-cool-tools-img-proc.standardize
+      display_name: Standardize Image
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.adjust_gamma
+      autogenerate: true
+      display_name: Gamma Adjust
+    - command: napari-cool-tools-img-proc.adjust_log
+      autogenerate: true
+      display_name: Log Adjust
+    - command: napari-cool-tools-img-proc.clahe
+      display_name: contrast (CLAHE)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.match_histogram
+      display_name: Match Histograms
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.denoise_tv
+      display_name: TVD (Chambolle)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.bilateral
+      display_name: Bilateral Filter
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.unsharp
+      display_name: Sharpen (UM)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.median
+      display_name: Median Blur
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.gblur
+      display_name: Gaussian Blur
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.pad2D
+      display_name: Pad 2D
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.pooling
+      display_name: Pooling 2D
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.morph_dialtion
+      display_name: Dilation(Morph)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.morph_erosion
+      display_name: Erosion(Morph)
+      autogenerate: true

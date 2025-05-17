@@ -1,0 +1,52 @@
+name: napari-cool-tools-registration
+display_name: COOL Lab Registration Tools
+contributions:
+  commands:
+    - id: napari-cool-tools-registration.a_scan_correction
+      title: Correct A-scan distortion of Volume
+      python_name: napari_cool_tools_registration._registration_tools:a_scan_correction
+    - id: napari-cool-tools-registration.a_scan_reg_calc_settings
+      title: Calculate A-scan registration settings
+      python_name: napari_cool_tools_registration._registration_tools:a_scan_reg_calc_settings
+    - id: napari-cool-tools-registration.a_scan_reg_subpix
+      title: Register A-scans of OCT volume (subpixel)
+      python_name: napari_cool_tools_registration._registration_tools:a_scan_reg_subpix
+    - id: napari-cool-tools-registration.adjust_aspect_ratio
+      title: Adjust Aspect Ratio
+      python_name: napari_cool_tools_registration._registration_tools:adjust_aspect_ratio_plugin
+    - id: napari-cool-tools-registration.optical_flow_reg
+      title: Optical Flow Registration
+      python_name: napari_cool_tools_registration._registration_tools:optical_flow_registration
+    - id: napari-cool-tools-registration.curve_correction
+      title: BScan Curve Correction
+      python_name: napari_cool_tools_registration._curve_correction:Curve_Correction_Widget
+    - id: napari-cool-tools-registration.m_scan_registration
+      title: MScan registration
+      python_name: napari_cool_tools_registration._registration_tools:m_scan_registration
+    - id: napari-cool-tools-registration.enface_registration
+      title: Enface registration
+      python_name: napari_cool_tools_registration._enfaces_registration:enface_registration_plugin
+  widgets:
+    - command: napari-cool-tools-registration.adjust_aspect_ratio
+      display_name: Adjust Aspect Ratio
+      autogenerate: true
+    - command: napari-cool-tools-registration.curve_correction
+      display_name: BScan Curve Correction
+    - command: napari-cool-tools-registration.a_scan_correction
+      display_name: Correct A-scan distortion
+      autogenerate: true
+    - command: napari-cool-tools-registration.a_scan_reg_calc_settings
+      display_name: Calculate A-scan registration settings
+      autogenerate: true
+    - command: napari-cool-tools-registration.a_scan_reg_subpix
+      display_name: Register A-scans of OCT volume (subpixel)
+      autogenerate: true
+    - command: napari-cool-tools-registration.optical_flow_reg
+      display_name: Optical Flow Registration
+      autogenerate: true
+    - command: napari-cool-tools-registration.m_scan_registration
+      display_name: MScan registration
+      autogenerate: true
+    - command: napari-cool-tools-registration.enface_registration
+      display_name: Enface registration
+      autogenerate: false

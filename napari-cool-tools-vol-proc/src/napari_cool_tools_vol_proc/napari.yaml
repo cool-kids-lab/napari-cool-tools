@@ -1,0 +1,125 @@
+name: napari-cool-tools-vol-proc
+display_name: COOL Tools Volume Processing
+contributions:
+  commands:
+    - id: napari-cool-tools-vol-proc.avg_bscans
+      title: Average Bscans 
+      python_name: napari_cool_tools_vol_proc._averaging_tools:average_bscans_plugin
+    - id: napari-cool-tools-vol-proc.avg_per_bscan
+      title: Average per Bscan
+      python_name: napari_cool_tools_vol_proc._averaging_tools:average_per_bscan_plugin
+    - id: napari-cool-tools-vol-proc.mip
+      title: Maximum Intensity Projection (Orthogonal)
+      python_name: napari_cool_tools_vol_proc._projection_tools:mip
+    - id: napari-cool-tools-vol-proc.circle_mask
+      title: Draw Circle Mask (Center to Radius)
+      python_name: napari_cool_tools_vol_proc._measuring_tools:draw_circle_mask
+    - id: napari-cool-tools-vol-proc.calc_z1
+      title: Calculate Zone 1 Volumes
+      python_name: napari_cool_tools_vol_proc._measuring_tools:calc_zone1
+    - id: napari-cool-tools-vol-proc.calc_label_vols
+      title: Calculate Label Volumes
+      python_name: napari_cool_tools_vol_proc._measuring_tools:calc_label_volumes
+    - id: napari-cool-tools-vol-proc.reshape_vol
+      title: Reshape Volume Data
+      python_name: napari_cool_tools_vol_proc._slicing_shaping_tools:reshape_vol
+      category: Slice and Shape
+    - id: napari-cool-tools-vol-proc.split_vol
+      title: Split Volume Data
+      python_name: napari_cool_tools_vol_proc._slicing_shaping_tools:split_vol
+      category: Slice and Shape
+    - id: napari-cool-tools-vol-proc.stack_selected
+      title: Stack Selected
+      python_name: napari_cool_tools_vol_proc._slicing_shaping_tools:stack_selected
+      category: Slice and Shape
+    - id: napari-cool-tools-vol-proc.stack_selected_2D
+      title: Stack Selected 2D
+      python_name: napari_cool_tools_vol_proc._slicing_shaping_tools:stack_selected_2D
+      category: Slice and Shape
+    - id: napari-cool-tools-vol-proc.create_from_img
+      title: Create label from image
+      category: Masking
+      python_name: napari_cool_tools_vol_proc._masking_tools:create_blank_lable_from_layer_plugin
+    - id: napari-cool-tools-vol-proc.isolate_labeled_volume
+      title: Isolate Labeled Volume
+      python_name: napari_cool_tools_vol_proc._masking_tools:isolate_labeled_volume_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.project_mask
+      title: Project 2D Mask
+      python_name: napari_cool_tools_vol_proc._masking_tools:project_2d_mask_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.bscan_lbl_cleanup
+      title: Clean up B-scan Labels
+      python_name: napari_cool_tools_vol_proc._masking_tools:bscan_label_cleanup_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.group_labels
+      title: Group Labels
+      python_name: napari_cool_tools_vol_proc._masking_tools:group_labels_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.mask_relative
+      title: Mask Relative to Label
+      python_name: napari_cool_tools_vol_proc._masking_tools:mask_relative_to_existing_label_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.mask_interface
+      title: Mask border of Label
+      python_name: napari_cool_tools_vol_proc._masking_tools:mask_interface_of_existing_label_plugin
+      category: Masking
+    - id: napari-cool-tools-vol-proc.find_brightest_avg_pixels
+      title: Find brightest avg pixels
+      python_name: napari_cool_tools_vol_proc._masking_tools:find_brightest_avg_pixels
+      category: Masking
+  widgets:
+    - command: napari-cool-tools-vol-proc.avg_bscans
+      display_name: Average Bscans
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.avg_per_bscan
+      display_name: Average per Bscan
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.mip
+      display_name: MIP (Orthogonal)
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.circle_mask
+      display_name: Draw Circle
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.calc_z1
+      display_name: Calc Z1
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.calc_label_vols
+      display_name: Calculate Label Volumes
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.reshape_vol
+      display_name: Reshape Volume Data
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.split_vol
+      display_name: Split Volume Data
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.stack_selected
+      display_name: Stack Selected
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.stack_selected_2D
+      display_name: Stack Selected 2D
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.create_from_img
+      display_name: Create label from image
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.isolate_labeled_volume
+      display_name: Isolate Labeled Volume
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.project_mask
+      display_name: Project 2D Mask
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.bscan_lbl_cleanup
+      display_name: Clean up B-scan Labels
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.group_labels
+      display_name: Group Labels
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.mask_relative
+      display_name: Mask Relative to Label
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.mask_interface
+      display_name: Mask border of Label
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.find_brightest_avg_pixels
+      display_name: Find brightest avg pixels
+      autogenerate: true

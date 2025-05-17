@@ -1,0 +1,152 @@
+name: napari-cool-tools-io
+display_name: COOL Lab IO tools
+contributions:
+  commands:
+    - id: napari-cool-tools-io.get_reader
+      python_name: napari_cool_tools_io._reader:napari_get_reader
+      title: Open data with COOL lab IO tools
+    - id: napari-cool-tools-io.prof_get_reader
+      python_name: napari_cool_tools_io._prof_reader:prof_get_reader
+      title: Open .prof
+    - id: napari-cool-tools-io.unp_get_reader
+      python_name: napari_cool_tools_io._unp_reader:unp_get_reader
+      title: Open .unp
+    - id: napari-cool-tools-io.mat_get_reader
+      python_name: napari_cool_tools_io._mat_reader:mat_get_reader
+      title: Open .mat
+    - id: napari-cool-tools-io.write_multiple
+      python_name: napari_cool_tools_io._writer:write_multiple
+      title: Save multi-layer data with COOL lab IO tools
+    - id: napari-cool-tools-io.write_single_image
+      python_name: napari_cool_tools_io._writer:write_single_image
+      title: Save image data with COOL lab IO tools
+    - id: napari-cool-tools-io.write_scene_mat
+      title: Save Scene .mat
+      python_name: napari_cool_tools_io._mat_writer:mat_file_writer
+    - id: napari-cool-tools-io.write_compressed_scene_mat
+      title: Save compressed Scene .mat
+      python_name: napari_cool_tools_io._mat_writer:compressed_mat_file_writer
+    - id: napari-cool-tools-io.write_data_mat
+      title: Save Scene .mat
+      python_name: napari_cool_tools_io._mat_writer:data_mat_file_writer
+    - id: napari-cool-tools-io.write_compressed_data_mat
+      title: Save compressed Scene .mat
+      python_name: napari_cool_tools_io._mat_writer:compressed_data_mat_file_writer
+    - id: napari-cool-tools-io.write_data_prof
+      title: Save Data .prof
+      python_name: napari_cool_tools_io._prof_writer:prof_file_writer
+    - id: napari-cool-tools-io.write_data_float64
+      title: Save Data float64 data
+      python_name: napari_cool_tools_io._float64_writer:float64_file_writer
+    - id: napari-cool-tools-io.load_slo
+      title: Load ".slo" files without metadata
+      python_name: napari_cool_tools_io._load_slo:load_slo
+    - id: napari-cool-tools-io.capture_view_data
+      title: Capture data from the active viewport
+      python_name: napari_cool_tools_io._screen_capture:data_capture_from_view
+    - id: napari-cool-tools-io.capture_view_image
+      title: Capture image with settings from the active viewport
+      python_name: napari_cool_tools_io._screen_capture:image_capture_from_view
+    - id: napari-cool-tools-io.convert_labels_tiff
+      title: Convert labels to tiff(grayscale)
+      python_name: napari_cool_tools_io._import_export_labels:convert_labels_tiff
+    - id: napari-cool-tools-io.convert_tiff_labels
+      title: Convert tiff(grayscale) to labels
+      python_name: napari_cool_tools_io._import_export_labels:convert_tiff_labels
+    - id: napari-cool-tools-io.convert_unp_prof
+      title: Convert unp to prof
+      python_name: napari_cool_tools_io._import_unp:convert_unp_prof
+  readers:
+    - command: napari-cool-tools-io.prof_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.prof'
+    - command: napari-cool-tools-io.unp_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.unp'
+    - command: napari-cool-tools-io.mat_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.mat'
+  writers:
+    - command: napari-cool-tools-io.write_scene_mat
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      - shapes*
+      - surface*
+      - tracks*
+      - vectors*
+      filename_extensions:
+      - .mat
+      display_name: Napari Scene # shown in file save dialog
+    - command: napari-cool-tools-io.write_compressed_scene_mat
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      - shapes*
+      - surface*
+      - tracks*
+      - vectors*
+      filename_extensions:
+      - .mat
+      display_name: Napari Scene - compressed # shown in file save dialog
+    - command: napari-cool-tools-io.write_data_mat
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      - shapes*
+      - surface*
+      - tracks*
+      - vectors*
+      filename_extensions:
+      - .mat
+      display_name: Napari Data # shown in file save dialog
+    - command: napari-cool-tools-io.write_compressed_data_mat
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      - shapes*
+      - surface*
+      - tracks*
+      - vectors*
+      filename_extensions:
+      - .mat
+      display_name: Napari Data - compressed # shown in file save dialog
+    - command: napari-cool-tools-io.write_data_prof
+      layer_types:
+      - image*
+      - labels*
+      filename_extensions:
+      - .prof
+      display_name: Napari Data # shown in file save dialog
+    - command: napari-cool-tools-io.write_data_float64
+      layer_types:
+      - image*
+      filename_extensions:
+      - .png
+      display_name: Float64 Conversion # shown in file save dialog
+  widgets:
+    - command: napari-cool-tools-io.load_slo
+      display_name: Load .slo w/o metadata
+      autogenerate: false
+    - command: napari-cool-tools-io.capture_view_data
+      display_name: Data capture (viewport)
+      autogenerate: false
+    - command: napari-cool-tools-io.capture_view_image
+      display_name: Image capture (viewport)
+      autogenerate: false
+    - command: napari-cool-tools-io.convert_labels_tiff
+      display_name: Convert labels to tiff
+      autogenerate: true
+    - command: napari-cool-tools-io.convert_tiff_labels
+      display_name: Convert tiff to labels
+      autogenerate: true
+    - command: napari-cool-tools-io.convert_unp_prof
+      display_name: Convert UNP to Prof
+      autogenerate: false
