@@ -69,6 +69,10 @@ def _on_init(widget):
             for j in range(0,start_line.shape[1]):
                 start_idx = int(start_line[i,j])
                 stop_idx = int(stop_line[i,j])
+
+                if start_idx == 0:
+                    continue
+
                 seg_canvas[i,j,start_idx:stop_idx] = 1
 
         seg_canvas = seg_canvas.transpose(0, 2, 1)
