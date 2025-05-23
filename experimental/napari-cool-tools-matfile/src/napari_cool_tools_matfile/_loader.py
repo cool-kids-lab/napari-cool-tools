@@ -100,7 +100,7 @@ def _on_init(widget):
         oct_label = viewer.layers[widget.segmentation_label.current_choice].data
 
         start_label = np.argmax(oct_label,axis=1) #(1200,1200)
-        start_label = start_label.astype(np.uint16)
+        # start_label = start_label.astype(np.float64)
         start_label = start_label.transpose(1,0)
 
         oct_label = np.flip(oct_label,axis=1)
@@ -108,7 +108,7 @@ def _on_init(widget):
         stop_label = np.argmax(oct_label,axis=1) #(1200,1200)
 
         stop_label = oct_label.shape[1] - stop_label
-        stop_label = stop_label.astype(np.uint16)
+        # stop_label = stop_label.astype(np.float64)
         stop_label = stop_label.transpose(1,0)
       
         filename = oct_segmentation.__str__()
@@ -117,6 +117,9 @@ def _on_init(widget):
         seg_file = hdf5storage.loadmat(filename) 
 
         old_label = seg_file['ManualCurveData']
+
+        stop_label = stop_label.astype(old_label.dtype)
+        start_label = start_label.astype(old_label.dtype)
 
         old_label[:,0,:] =  start_label
         old_label[:,5,:] =  stop_label
