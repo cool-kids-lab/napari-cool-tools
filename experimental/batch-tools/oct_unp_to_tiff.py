@@ -17,8 +17,20 @@ def dc_subtraction_double_sweep(data):
     """this function is used to remove the dc signal (dc substraction) for double sweep source signal
     therefore, the number of a-scan per b-scan is expected to be even number otherwise, this function will produce error message"""
 
+    # prep temorary array
+
+    #print(type(data.shape[0]))
+
     corrected_1 = np.zeros((int(data.shape[0]/2),data.shape[1]))
     corrected_2 = np.zeros((int(data.shape[0]/2),data.shape[1]))
+
+    #print(f"corrected 1 shape: {corrected_1.shape}\ncorrected 2 shape: {corrected_2.shape}\n")
+
+    # flip odd data
+    
+    #print(data,data.shape)
+    #print(data[1::2,:],data[1::2,:].shape)
+    #print(data[1::2,:][::-1,:],data[1::2,:][::-1,:].shape)
 
     corrected_1 = data[::2,:][:,::-1]
     corrected_2 = data[1::2,:]  
@@ -31,6 +43,8 @@ def dc_subtraction_double_sweep(data):
     subtracted_signal = np.zeros(data.shape)
     subtracted_signal[::2,:] = corrected_1
     subtracted_signal[1::2,:] = corrected_2
+
+    #print(f"subtracted signal: {subtracted_signal}")
 
     return subtracted_signal
 

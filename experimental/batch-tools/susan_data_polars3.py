@@ -16,6 +16,22 @@ susan_df = susan_df.with_columns(
     pl.col("Subject ID").fill_null(strategy="forward"),
 )
 
+
+bscan_data_df = susan_df.filter(
+    (pl.col("MRN").is_in(["08364574","08906231","08977490","08369591"]))
+)
+
+bscan_data_df = susan_df.filter(
+    (pl.col("MRN") == "08135530") & (pl.col("Session Date") == dt(2021,12,7)) |
+    (pl.col("MRN") == "08364574") & (pl.col("Session Date") == dt(2022,12,6)) |
+    (pl.col("MRN") == "08906231") & (pl.col("Session Date") == dt(2023,12,27)) |
+    (pl.col("MRN") == "08977490") & (pl.col("Session Date") == dt(2024,5,15)) |
+    (pl.col("MRN") == "08369591") & (pl.col("Session Date") == dt(2023,1,18))    
+).filter(
+    pl.col("eye") == "od"
+)
+
+
 plus_df = susan_df.filter(
     (pl.col("Session Plus") == "Plus") & (pl.col("Session Date") > dt(2022,12,31))
 )
@@ -99,6 +115,12 @@ enface_project_out_df = enface_project_df.select(
     pl.all().exclude("MRN","gestationalAgeWeeks","gestationalAgeDays","Session Date","Examiner","Session Category","VSS")
 ).sort("Subject ID")
 
+bscan_project_out_df = bscan_data_df.with_columns(
+    GARaw=pl.col("gestationalAgeWeeks") + (pl.col("gestationalAgeDays")/7.0)
+).select(
+    pl.all().exclude("MRN","gestationalAgeWeeks","gestationalAgeDays","Session Date","Examiner","Session Category","VSS")
+).sort("Subject ID")
+
 #enface_project_out_df = enface_project_df.select(
 #    "Subject ID","BW","GARaw","PMARaw",
 #)
@@ -107,16 +129,47 @@ def generate_seg_paper_stats(df,decimals:int=3):
 
     roman_to_int = {"I":1,"II":2,"III":3,"IV":4,"V":5}
 
-    stats = df.select(
-        #Birth_Weight=pl.format("{} ± {}",pl.col("BW").mean(),pl.col("BW").std()),
-        pl.format("{} ± {}",pl.col("BW").mean().round(decimals),pl.col("BW").std().round(decimals)).alias("Birth Weight (g)"),        
-        pl.format("{} ± {}",pl.col("GARaw").mean().round(decimals),pl.col("GARaw").std().round(decimals)).alias("Gestational Age (days)"),
-        pl.format("{} ± {}",pl.col("PMARaw").mean().round(decimals),pl.col("PMARaw").std().round(decimals)).alias("Postmenstrual Age (days)"),
-        pl.concat_str(pl.col("Session Zone").str.replace_all(" ","").replace(roman_to_int).str.to_integer().mean().round(decimals)).alias("Average Zone"),
-        Infants = pl.col("Subject ID").n_unique(),
-        Eyes=pl.lit(len(df)),
-        #Eyes=pl.lit(len(df)//2),
-    )
+    if df.height > 1:
+        stats = df.select(
+            #Birth_Weight=pl.format("{} ± {}",pl.col("BW").mean(),pl.col("BW").std()),
+            #pl.when(pl.len() > 1).then(     
+            #    pl.format("{} ± {}",pl.col("BW").mean().round(decimals),pl.col("BW").std().round(decimals)).alias("Birth Weight (g)"),
+            #).when(pl.len() == 1).then(
+            #    pl.format("{} ± {}",pl.col("BW").round(decimals),pl.col("BW").round(decimals)).alias("Birth Weight (g)"),
+            #).otherwise(
+            #    pl.format("{} ± {}",pl.lit(None),pl.lit(None)).alias("Birth Weight (g)"),
+            #),
+            pl.format("{} ± {}",pl.col("BW").mean().round(decimals),pl.col("BW").std().round(decimals)).alias("Birth Weight (g)"),        
+            pl.format("{} ± {}",pl.col("GARaw").mean().round(decimals),pl.col("GARaw").std().round(decimals)).alias("Gestational Age (days)"),
+            pl.format("{} ± {}",pl.col("PMARaw").mean().round(decimals),pl.col("PMARaw").std().round(decimals)).alias("Postmenstrual Age (days)"),
+            pl.concat_str(pl.col("Session Zone").str.replace_all(" ","").replace(roman_to_int).str.to_integer().mean().round(decimals)).alias("Average Zone"),
+            Infants = pl.col("Subject ID").n_unique(),
+            Eyes=pl.len(),
+            Eyes2=pl.lit(len(df)),
+            #Eyes=pl.lit(len(df)//2),
+        )
+    elif df.height == 1:
+        stats = df.select(
+            pl.format("{} ± {}",pl.col("BW").round(decimals),pl.lit(0.0).round()).alias("Birth Weight (g)"),        
+            pl.format("{} ± {}",pl.col("GARaw").round(decimals),pl.lit(0.0).round(decimals)).alias("Gestational Age (days)"),
+            pl.format("{} ± {}",pl.col("PMARaw").round(decimals),pl.lit(0.0).round(decimals)).alias("Postmenstrual Age (days)"),
+            pl.concat_str((pl.col("Session Zone").str.replace_all(" ","").replace(roman_to_int).str.to_integer()*1.0).mean().round(decimals)).alias("Average Zone"),
+            Infants = pl.col("Subject ID").n_unique(),
+            Eyes=pl.len(),
+            Eyes2=pl.lit(len(df)),
+            #Eyes=pl.lit(len(df)//2),
+        )
+    elif df.height < 1:
+        stats = df.select(
+            pl.format("{} ± {}",pl.lit(None),pl.lit(None)).alias("Birth Weight (g)"),        
+            pl.format("{} ± {}",pl.lit(None),pl.lit(None)).alias("Gestational Age (days)"),
+            pl.format("{} ± {}",pl.lit(None),pl.lit(None)).alias("Postmenstrual Age (days)"),
+            pl.concat_str(pl.lit(None)).alias("Average Zone"),
+            Infants = pl.col("Subject ID").n_unique(),
+            Eyes=pl.len(),
+            Eyes2=pl.lit(len(df)),
+            #Eyes=pl.lit(len(df)//2),
+        )
     zone = df.select(
         Infants=pl.lit(len(df)),
         Zone=pl.concat_str(pl.col("Session Zone").str.replace_all(" ","").replace(roman_to_int).str.to_integer().value_counts()),
@@ -131,6 +184,42 @@ def generate_seg_paper_stats(df,decimals:int=3):
     )
     return stats_out
 
+def generate_tabular_data(df,decimals:int=3):
+    """
+    """
+
+    no_plus = df.filter(
+    pl.col("Session Plus") == "Normal"
+    )
+    pre_plus = df.filter(
+        pl.col("Session Plus") == "Pre-Plus"
+    )
+    plus = df.filter(
+        pl.col("Session Plus") == "Plus"
+    )
+    stage_0 =  df.filter(
+        pl.col("Session Stage") == 0
+    )
+    stage_1 =  df.filter(
+        pl.col("Session Stage") == 1
+    )
+    stage_2 =  df.filter(
+        pl.col("Session Stage") == 2
+    )
+    stage_3 =  df.filter(
+        pl.col("Session Stage") == 3
+    )
+
+    df_rows = [df,stage_0,stage_1,stage_2,stage_3,no_plus,pre_plus,plus]
+
+    stats_for_table = []
+
+    for df_row in df_rows:
+        print(df_row)
+        stats_for_table.append(generate_seg_paper_stats(df_row,decimals=decimals))
+
+    stats_for_table_df = pl.concat(stats_for_table,how="vertical").transpose(include_header=True,header_name="Demographics",column_names=["All","Stage 0","Stage 1","Stage 2","Stage 3","Normal","Pre-Plus","Plus"])
+    return stats_for_table_df
 
 no_plus = enface_project_out_df.filter(
     pl.col("Session Plus") == "Normal"
@@ -166,13 +255,26 @@ stage_3_stats = generate_seg_paper_stats(stage_3,decimals=2)
 stats_for_table = [all_stats,stage_0_stats,stage_1_stats,stage_2_stats,stage_3_stats,no_plus_stats,pre_plus_stats,plus_stats]
 #roman_to_int = {"I":1,"II":2,"III":3,"IV":4,"V":5}
 stats_for_table_df = pl.concat(stats_for_table,how="vertical").transpose(include_header=True,header_name="Demographics",column_names=["All","Stage 0","Stage 1","Stage 2","Stage 3","Normal","Pre-Plus","Plus"])
+
+en_face_stats_for_table_df = generate_tabular_data(enface_project_out_df,decimals=2)
+bscan_stats_for_table_df = generate_tabular_data(bscan_project_out_df,decimals=2)
+
 with pl.Config(tbl_cols=-1):
     for stats in stats_for_table:
         print(stats)
     print("stats_for_table_df",stats_for_table_df)
+    print("en_face_stats_for_table_df",en_face_stats_for_table_df)
+    print("bscan_stats_for_table_df",bscan_stats_for_table_df)
 
-stats_for_table_df.write_csv(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.csv"))
-stats_for_table_df.write_excel(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.xlsx"))
+#stats_for_table_df.write_csv(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.csv"))
+#stats_for_table_df.write_excel(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.xlsx"))
+
+en_face_stats_for_table_df.write_csv(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.csv"))
+en_face_stats_for_table_df.write_excel(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\enface_tabular_data.xlsx"))
+
+bscan_stats_for_table_df.write_csv(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\bscan_tabular_data.csv"))
+bscan_stats_for_table_df.write_excel(Path(r"D:\JJ\Projects\Segmentation_Paper\Data\bscan_tabular_data.xlsx"))
+
 
 #all_stats = enface_project_out_df.select(
 #    Birth_Weight=pl.format("{} ± {}",pl.col("BW").mean(),pl.col("BW").std()),
