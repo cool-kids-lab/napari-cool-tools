@@ -4,10 +4,9 @@ This module contains function code for segmenting images
 import gc
 import platform
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Literal
 
 import numpy as np
-import segmentation_models_pytorch as smp
 from tqdm import tqdm
 
 from napari.utils.notifications import show_info
@@ -17,13 +16,21 @@ from napari_cool_tools_io import torch,viewer,device,memory_stats
 
 
 this_file_path = Path(__file__)
-onnx_folder_parent_path = this_file_path.parents[2]
-onnx_folder_path = onnx_folder_parent_path / "onnx_models/bscan/"
+onnx_folder_parent_path = this_file_path.parents[3]
+onnx_bscan_path = onnx_folder_parent_path / "onnx_models/bscan/"
+onnx_enface_path = onnx_folder_parent_path / "onnx_models/enface"
+onnx_enface_vessels_path = onnx_enface_path / "vessels"
+onnx_enface_optic_nerve_path = onnx_enface_path / "optic_nerve"
+print(onnx_bscan_path)
+print(list(onnx_bscan_path.rglob("*.onnx")))
+onnx_bscan = list(onnx_bscan_path.rglob("*.onnx"))[0]
+onnx_enface_vessels = list(onnx_enface_vessels_path.rglob("*.onnx"))[0]
+onnx_enface_optic_nerve = list(onnx_enface_optic_nerve_path.rglob("*.onnx"))[0]
 
 
 def bscan_onnx_seg_func(img:ImageData,
                         #onnx_path=Path("../onnx_models/bscan/UWF_OCT_Bscan_seg_TD_Full_EP_250_PR_16-mixed_SD_60_06-23-2024_19h21m_top_10-epoch=0247-step=17856/UWF_OCT_Bscan_seg_TD_Full_EP_250_PR_16-mixed_SD_60_06-23-2024_19h21m_top_10-epoch=0247-step=17856.onnx"),
-                        onnx_path=onnx_folder_path,
+                        onnx_path=onnx_bscan,
                         batch_size:int=32, num_workers:int=0,
                         gpu_limit:int=6,
                         use_cpu:bool=True,output_preproc:bool=False,old_preproc:bool=False,debug:bool=False):
@@ -276,281 +283,18 @@ def bscan_onnx_seg_func(img:ImageData,
 
     return output
 
-def b_scan_pix2pixHD_seg_func(img:Image, state_dict_path=Path("./nn_state_dicts/b-scan/latest_net_G.pth"), label_flag:bool=True):
-    """Function runs image/volume through pixwpixHD trained generator network to create segmentation labels. 
-    Args:
-        img (Image): Image/Volume to be segmented.
-        state_dict_path (Path): Path to state dictionary of the network to be used for inference.
-        label_flag (bool): If true return labels layer with relevant masks as unique label values
-                           If false returns volume with unique channels masked with value 1.
-        
-    Returns:
-        Labels Layer containing B-scan segmentations with '_Seg' suffix added to name.
-    """
-    from models.pix2pixHD_model import InferenceModel
-    model = InferenceModel()
-    state_dict = torch.load(state_dict_path)
-
-    from models.networks import define_G
-
-    def_g_settings = {
-        "input_nc": 3,
-        "output_nc": 3,
-        "ngf": 64,
-        "netG": 'global',
-        "n_downsample_global": 4,
-        "n_blocks_global": 9,
-        "n_local_enhancers": 1,
-        "n_blocks_local": 3,
-        "norm": 'instance',
-        "gpu_ids": [0],
-    }
-
-    data = img.data.copy()
-
-    try:
-        assert data.ndim == 2 or data.ndim == 3, "Only works for data of 2 or 3 dimensions"
-    except AssertionError as e:
-        print("An error Occured:", str(e))
-    else:
-
-        pt_data = torch.tensor(data,device=device)
-    
-        gen = define_G(**def_g_settings)
-        gen_dev = gen.to(device)
-        gen_dev.load_state_dict(state_dict)
-        gen_dev.eval()
-        
-        name = f"{img.name}_Seg"
-        add_kwargs = {"name":f"{name}"}
-
-        if data.ndim == 2:
-            pt_data2 = pt_data.unsqueeze(0).repeat(3,1,1)
-            output = gen(pt_data2)
-            retina = output[0] == 1
-            choroid = output[1] == 1
-            sclera = output[2] == 1
-
-            if label_flag:
-                labels = torch.zeros_like(output[0])
-                labels[retina] = 1
-                labels[choroid] = 2
-                labels[sclera] = 3
-                labels = labels.to(torch.uint8)
-                labels_out = labels.detach().cpu().numpy()
-                layer_type = 'labels'
-                layer = Layer.create(labels_out,add_kwargs,layer_type)
-
-                #clean up
-                del labels_out
-                del labels
-                
-            else:
-                output2 = output.detach().cpu().numpy()
-                layer_type = 'image'                
-                layer = Layer.create(output2,add_kwargs,layer_type)
-                
-                #clean up
-                del output2
-
-            #clean up
-            del retina
-            del choroid
-            del sclera
-            del output
-            del pt_data2
-        
-        elif data.ndim == 3:
-            outstack = []
-            for i in tqdm(range(len(data)),desc="B-scan Seg"):
-
-                temp_data = pt_data[i].unsqueeze(0).repeat(3,1,1)
-                output = gen(temp_data)
-                retina = output[0] == 1
-                choroid = output[1] == 1
-                sclera = output[2] == 1
-
-                if label_flag:
-                    labels = torch.zeros_like(output[0])
-                    labels[retina] = 1
-                    labels[choroid] = 2
-                    labels[sclera] = 3
-
-                    outstack.append(labels)
-                    #clean up
-                    del labels
-
-                else:
-                    outstack.append(output)
-                    #clean up
-                    del output
-
-                #clean up
-                del retina
-                del choroid
-                del sclera
-                del output
-                del temp_data
-                
-                #clear cache from the loop
-                #gc.collect() 
-                #torch.cuda.empty_cache()
-
-            if label_flag:
-                labels2 = torch.stack(outstack)
-                labels2 = labels2.to(torch.uint8)
-                labels_out = labels2.detach().cpu().numpy()
-                layer_type = 'labels'
-                layer = Layer.create(labels_out,add_kwargs,layer_type)
-
-                # clean up
-                del labels_out
-                del labels2
-                del outstack
-            else:
-                output2 = torch.stack(outstack)
-                layer_type = 'image'
-                layer = Layer.create(output2,add_kwargs,layer_type)
-
-                # clean up
-                del output2
-                del outstack
-
-        #clean up
-        del pt_data
-        del gen_dev
-        del gen
-        gc.collect() 
-    
-    return layer
-
-def enface_unet_seg_func(img:Image, state_dict_path=Path("./nn_state_dicts/enface/unet_efficientnet-b5_imagenet_dc10_sd_60_lr_5e-04_40EP_BS_32_04-19-2023_17h10m.pth"), 
-                         use_cpu:bool=True) -> List[Layer]:
-    """Function runs image/volume through pixwpixHD trained generator network to create segmentation labels. 
-    Args:
-        img (Image): Image/Volume to be segmented.
-        state_dict_path (Path): Path to state dictionary of the network to be used for inference.
-        label_flag (bool): If true return labels layer with relevant masks as unique label values
-                           If false returns volume with unique channels masked with value 1.
-        
-    Yields:
-        Image Layer containing padded enface image with '_Pad' suffix added to name
-        Labels Layer containing B-scan segmentations with '_Seg' suffix added to name.
-    """
-    from napari_cool_tools_io import device
-    from jj_nn_framework.image_funcs import normalize_in_range, pad_to_target_2d, pad_to_targetM_2d, bw_1_to_3ch
-    from torchvision import transforms
-    from kornia.enhance import equalize_clahe
-
-    layers_out = []
-
-    if use_cpu:
-        device = 'cpu'
-
-    pttm_params = {
-        'h': 864,
-        'w': 864,
-        'X_data_format': 'NCHW',
-        'y_data_format': 'NHW',
-        'mode': 'constant',
-        'value': None,
-        'device': device
-    }
-
-    data = img.data.copy()
-    pt_data = torch.tensor(data,device=device)
-    #print(f"pt_data shape: {pt_data.shape}\n")
-    ch3_data = bw_1_to_3ch(pt_data,data_format='HW')
-    #print(f"ch3_data shape: {ch3_data.shape}\n")
-    norm_ch3_data = normalize_in_range(ch3_data,0.0,1.0)
-    #print(f"norm_ch3_data shape: {norm_ch3_data.shape}\n")
-
-    crop_flag = False
-    resize_flag = False
-
-    if data.shape[-1] < 864 or data.shape[-2] < 864:
-        crop_flag = True
-    else:
-        resize_flag = True
-
-
-    pad_data = pad_to_targetM_2d(norm_ch3_data,(864,864),'NCHW')
-
-
-    name = f"{img.name}_Pad"
-    add_kwargs = {"name":f"{name}"}
-    layer_type = "image"
-
-    out = pad_data.detach().cpu().numpy().squeeze()
-
-    offset_0 = out[0].shape[0] - data.shape[0]
-    offset_1 = out[0].shape[1] - data.shape[1]
-    start_0 = int(offset_0/2)
-    start_1 = int(offset_1/2)
-    end_0 = int(out[0].shape[0] - start_0)
-    end_1 = int(out[0].shape[1] - start_1)
-
-    x = normalize_in_range(pad_data,0,1)
-    mean,std = x.mean([0,2,3]),x.std([0,2,3])
-    norm = transforms.Normalize(mean,std)
-    x_norm = norm(x)
-    x_norm2 = normalize_in_range(x_norm,0,1)
-
-    x_eq = equalize_clahe(x_norm2)
-
-    print(f"x shape: {x_eq.shape}\n")
-
-    name = f"{img.name}_Seg"
-    add_kwargs = {"name":f"{name}"}
-    layer_type = "labels"
-
-    ENCODER = "efficientnet-b5"
-    ENCODER_WEIGHTS = "imagenet"
-    CLASSES = [
-        "vessel"
-    ]
-    ACTIVATION = "sigmoid"
-
-    model = smp.Unet(encoder_name=ENCODER, # smp.UnetPlusPlus(encoder_name=ENCODER,
-                    encoder_weights=ENCODER_WEIGHTS,
-                    classes=len(CLASSES),
-                    activation=ACTIVATION)
-    state_dict = torch.load(state_dict_path,map_location=device)
-    model.load_state_dict(state_dict)
-    model.eval()
-    model_dev = model.to(device)
-    output = model_dev.predict(x_eq)
-    
-    seg_out = output.detach().cpu().numpy().squeeze().astype(int)
-    final_seg = seg_out[start_0:end_0,start_1:end_1]
-    layer = Layer.create(final_seg,add_kwargs,layer_type)
-    
-    # clean up
-    del final_seg
-    del seg_out
-    del output
-    del model_dev
-    del model
-    del x_eq
-    del x_norm2
-    del x_norm
-    del norm
-    del mean
-    del std
-    del x
-    del out
-    del pad_data
-    del norm_ch3_data
-    del ch3_data
-    del pt_data
-
-    gc.collect()
-
-    layers_out.append(layer)
-    return layers_out
-
-def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OCT_enface_seg_EP_200_PR_16-mixed_SD_60_05-10-2024_12h50m_every_10-epoch=0069-step=3430.onnx"), 
-                         use_cpu:bool=True,DoG:bool=False,blur:bool=False,log_adjust:bool=False,output_preproc:bool=False,debug:bool=False) -> List[Layer]:
+def enface_onnx_seg_func(
+        data:ImageData, 
+        onnx_path=onnx_enface_vessels, 
+        #segmentation:Literal["optic_nerve","vessel"],
+        label_val:int=1,
+        use_cpu:bool=True,
+        DoG:bool=False,
+        blur:bool=False,
+        log_adjust:bool=False,
+        output_preproc:bool=False,
+        debug:bool=False
+    ) -> List[Layer]:
     """Function runs image/volume through pixwpixHD trained generator network to create segmentation labels. 
     Args:
         img (Image): Image/Volume to be segmented.
@@ -598,7 +342,16 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
         'gain': 1.0
     }
 
-    data = img.data.copy()
+    data = data.copy()
+
+    if data.dtype == 'float64':
+        data = data.astype('float32')
+    elif data.dtype == 'uint8':
+        #data = normalize_data_in_range_pt_func()
+        data = normalize_in_range(data.astype('float32'),min_val=0.0,max_val=1.0)
+    elif data.dtype != 'float32':
+        ValueError(f"{data.dtype} is not supported float32, float64, and uint8 are supported")
+
     pt_data = torch.tensor(data,device=device)
     #print(f"pt_data shape: {pt_data.shape}\n")
     ch3_data = bw_1_to_3ch(pt_data,data_format='HW')
@@ -611,7 +364,6 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
         pad_flag = True
         mod_data = pad_to_targetM_2d(norm_ch3_data,(864,864),'NCHW')
         print(f"pad_flag (shape): {mod_data.shape}\n")
-        print("I'm here")
     elif norm_ch3_data.shape[-1] > 864 or norm_ch3_data.shape[-2] > 864:
         resize_flag = True
         original_shape = (norm_ch3_data.shape[-2],norm_ch3_data.shape[-1])
@@ -624,8 +376,6 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
     #pad_data = pad_to_targetM_2d(norm_ch3_data,(864,864),'NCHW')
 
     out = mod_data.detach().cpu().numpy().squeeze()
-
-    print("I'm here")
 
     if debug == True:
         name = f"{img.name}_Pad"
@@ -688,15 +438,21 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
     #show_info(f'x_eq: {x_eq.shape}')
 
     x_eq_cpu = x_eq.detach().cpu().numpy()
-    pre_poc = x_eq.squeeze().mean(dim=0).detach().cpu().numpy()
-    pre_proc_final = pre_poc[start_0:end_0,start_1:end_1]
+    pre_poc = x_eq.mean(dim=0).detach().cpu() #.numpy()
+
+    if pad_flag:
+        pre_proc_final = pre_poc[start_0:end_0,start_1:end_1]
+    elif resize_flag:
+        pre_proc_final = v2.functional.resize(pre_poc,original_shape,interpolation=v2.InterpolationMode.BICUBIC)
+    else:
+        pre_proc_final = pre_poc
 
     if output_preproc == True:
         name = f"{img.name}_Preproc"
         add_kwargs = {"name":f"{name}"}
         layer_type = "image"
 
-        layer = Layer.create(pre_proc_final,add_kwargs,layer_type)
+        layer = Layer.create(pre_proc_final.squeeze().numpy(),add_kwargs,layer_type)
         layers_out.append(layer)
 
     # start onnx
@@ -710,20 +466,15 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
     #seg_out = onnx_out.detach().cpu().numpy().squeeze().astype(int)
 
     if pad_flag:
-        final_seg = onnx_out[start_0:end_0,start_1:end_1]
+        final_seg = onnx_out[start_0:end_0,start_1:end_1].astype(bool)*(label_val)
     elif resize_flag:
-        final_seg = v2.functional.resize(onnx_out,original_shape,v2.InterpolationMode.NEAREST_EXACT).astype(bool)*1
+        final_seg = v2.functional.resize(torch.tensor(onnx_out).unsqueeze(0),original_shape,v2.InterpolationMode.NEAREST_EXACT).numpy().astype(bool)*(label_val)
     else:
-        final_seg = onnx_out
+        final_seg = onnx_out.astype(bool)*(label_val)
 
-    name = f"{img.name}_Seg"
-    add_kwargs = {"name":f"{name}"}
-    layer_type = "labels"
-    layer = Layer.create(final_seg,add_kwargs,layer_type)
-    layers_out.append(layer)
     
     # clean up
-    del final_seg, onnx_session
+    del onnx_session
     #del seg_out
     #del output
     #del model_dev
@@ -736,7 +487,7 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
     del std
     del x
     del out
-    del pad_data
+    del mod_data
     del norm_ch3_data
     del ch3_data
     del pt_data
@@ -744,6 +495,5 @@ def enface_onnx_seg_func(img:Image, onnx_path=Path("../onnx_models/enface/UWF_OC
     gc.collect()
     torch.cuda.empty_cache()
 
-   
 
-    return layers_out
+    return final_seg
