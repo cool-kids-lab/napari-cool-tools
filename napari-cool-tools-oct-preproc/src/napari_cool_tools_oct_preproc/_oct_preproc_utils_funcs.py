@@ -460,7 +460,7 @@ def generate_enface(
     """
     from napari_cool_tools_registration._registration_tools_funcs import a_scan_reg_calc_settings, a_scan_subpix_registration
     from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_range_pt_func
-    from napari_cool_tools_img_proc._denoise_funcs import diff_of_gaus_func
+    from napari_cool_tools_img_proc._denoise_funcs import diff_of_gaus
     from napari_cool_tools_img_proc._equalization_funcs import clahe_pt_func
     from napari_cool_tools_img_proc._luminance_funcs import adjust_log_pt_func
 
@@ -526,7 +526,7 @@ def generate_enface(
             if log_correct:
                 out = adjust_log_pt_func(out,log_gain)
             if band_pass_filter:
-                out = diff_of_gaus_func(out,low_sigma=bp_low,high_sigma=bp_high,pt=bp_pt)
+                out = diff_of_gaus(out,low_sigma=bp_low,high_sigma=bp_high,pt=bp_pt)
             if exp:
                 out = out**n
 

@@ -351,12 +351,12 @@ def process_bscan_preset_func(vol:Image, ascan_corr:bool=True, Bandpass:bool=Fal
         processed b-scan volume(Image)
     """
     from napari_cool_tools_img_proc._normalization import normalize_in_range_func, normalize_in_range_pt_func
-    from napari_cool_tools_img_proc._denoise_funcs import diff_of_gaus_func
+    from napari_cool_tools_img_proc._denoise import diff_of_gaus_func
     from napari_cool_tools_img_proc._equalization import clahe_pt_func
     from napari_cool_tools_img_proc._luminance import adjust_log_pt_func
     from napari_cool_tools_img_proc._filters import filter_bilateral_pt_func, filter_median_pt_func
     from napari_cool_tools_vol_proc._averaging_tools import average_per_bscan
-    from napari_cool_tools_registration._registration_tools_funcs import a_scan_correction_func    
+    from napari_cool_tools_registration._registration_tools import a_scan_correction_func    
     
     #out = normalize_in_range_pt_func(vol,0,1) # add flag and refactor function
     out = normalize_in_range_func(vol,0,1)
@@ -825,71 +825,3 @@ def generate_octa_thread(
     show_info(f"OCTA processing thread completed")
 
     #return out_layer
-
-def annotation_preset(vol:Image, ascan_corr:bool=True):
-    """Do initial preprocessing of OCT B-scan and or enface to prepare them for annotation and analysis.
-    Args:
-        vol (Image): 3D ndarray representing structural OCT data
-        ascan_corr (bool): If true volume and enface image will be corrected for sin wave scanning distortion
-
-    Returns:
-        Layers of processed b-scans, processed enface image, b-scan segmentation, enface segmentation
-    """
-    annotation_preset_thread(vol=vol,ascan_corr=ascan_corr)
-    return
-
-@thread_worker(connect={"yielded": viewer.add_layer})
-def annotation_preset_thread(vol:Image, ascan_corr:bool=True) -> Generator[Layer,Layer,Layer]:
-    """Do initial preprocessing of OCT B-scan and or enface to prepare them for annotation and analysis.
-    Args:
-        vol (Image): 3D ndarray representing structural OCT data
-        ascan_corr (bool): If true volume and enface image will be corrected for sin wave scanning distortion
-
-    Returns:
-        Layers of processed b-scans, processed enface image, b-scan segmentation, enface segmentation
-    """
-    show_info(f"Annotation preset thread started")
-    layers = annotation_preset_func(vol=vol,ascan_corr=ascan_corr)
-    for layer in layers:
-        yield layer
-    torch.cuda.empty_cache()
-    memory_stats()
-    show_info(f"B-scan preset thread completed")
-    show_info(f"Annotation preset thread completed")
-
-
-def annotation_preset_func(vol:Image, ascan_corr:bool=True) -> Layer:
-    """Do initial preprocessing of OCT B-scan and or enface to prepare them for annotation and analysis.
-    Args:
-        vol (Image): 3D ndarray representing structural OCT data
-        ascan_corr (bool): If true volume and enface image will be corrected for sin wave scanning distortion
-
-    Returns:
-        Layers of processed b-scans, processed enface image, b-scan segmentation, enface segmentation
-    """
-    from napari_cool_tools_registration._registration_tools import a_scan_correction_func
-    from napari_cool_tools_segmentation._segmentation import b_scan_pix2pixHD_seg_func, enface_unet_seg_func
-
-    layers = []
-
-    if ascan_corr:
-        init = a_scan_correction_func(vol)
-    else:
-        init = vol
-
-    layers.append(init)
-
-    out = process_bscan_preset_func(init,ascan_corr=False)
-    enface_list = generate_enface_image_func(vol,sin_correct=True,band_pass_filter=False,CLAHE=False)
-    enface = enface_list[0]
-    bscan_seg = b_scan_pix2pixHD_seg_func(init)
-    enface_seg_list = enface_unet_seg_func(enface)
-    enface_seg = enface_seg_list[0]
-    print(type(enface_seg))
-
-    layers.append(out)
-    layers.append(bscan_seg)
-    layers.append(enface)
-    layers.append(enface_seg)
-
-    return layers
