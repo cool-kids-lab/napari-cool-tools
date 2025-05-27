@@ -45,7 +45,7 @@ def torch_file_reader(path):
             default to layer_type=="image" if not provided
     """
 
-    data,attributes,layer_type = torch.load(path)
+    data,attributes,layer_type = torch.load(path,weights_only=False)
     data = data.numpy()
     
     # transpose array so that x and y are switched then flip array

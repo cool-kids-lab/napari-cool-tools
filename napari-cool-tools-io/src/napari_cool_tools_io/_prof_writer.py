@@ -56,6 +56,8 @@ def prof_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
             # save_data.tofile(path)
 
             show_info(f"Saving {path}")
+        else:
+            raise ValueError(f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions.")
     else:
         path = Path(path)
         p_dir = Path(path.parent) / path.stem
@@ -87,11 +89,13 @@ def prof_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
                 # save_data.tofile(path)
 
                 show_info(f"Saving {out_path}")
+            else:
+                raise ValueError(f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions.")
 
                 # return [path]
             # case data is not proper dimension
-            else:
-                return None
+            # else:
+            #     return None
     return [path]
 
 
