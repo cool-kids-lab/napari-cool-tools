@@ -16,12 +16,13 @@ numpy = "==1.23.5"
 PyQt5-Qt5 = "==5.15.2"
 PyQt5 = "==5.15.*"
 napari = "==0.5.2"
-napari-cool-tools-img-proc = { path = "napari-cool-tools-img-proc", editable = true}
-napari-cool-tools-io = { path = "napari-cool-tools-io", editable = true}
-napari-cool-tools-oct-preproc = { path = "napari-cool-tools-oct-preproc", editable = true}
-napari-cool-tools-registration = { path = "napari-cool-tools-registration", editable = true}
-napari-cool-tools-segmentation = { path = "napari-cool-tools-segmentation", editable = true}
-napari-cool-tools-vol-proc = { path = "napari-cool-tools-vol-proc", editable = true}
+napari-cool-tools-img-proc = { path = "napari-cool-tools-img-proc", editable = true }
+napari-cool-tools-io = { path = "napari-cool-tools-io", editable = true }
+napari-cool-tools-oct-preproc = { path = "napari-cool-tools-oct-preproc", editable = true }
+napari-cool-tools-registration = { path = "napari-cool-tools-registration", editable = true }
+napari-cool-tools-segmentation = { path = "napari-cool-tools-segmentation", editable = true }
+napari-cool-tools-vol-proc = { path = "napari-cool-tools-vol-proc", editable = true }
+napari-cool-tools-submenu-patch = { path = "napari-cool-tools-submenu-patch", editable = true }
 kornia = "==0.8.*"
 flatbuffers = "==25.2.*"
 packaging = "==24.*"
