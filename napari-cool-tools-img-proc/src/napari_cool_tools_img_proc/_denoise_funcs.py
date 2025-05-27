@@ -45,7 +45,7 @@ def torchvision_diff_of_gaus_2d(data:ImageData, low_sigma:float=1.0, high_sigma:
 
     return norm_out
 
-def diff_of_gaus_func(data:ImageData, low_sigma, high_sigma=None, mode='nearest', cval=0, channel_axis=None, truncate=4.0, pt=True) -> ImageData:
+def diff_of_gaus(data:ImageData, low_sigma, high_sigma=None, mode='nearest', cval=0, channel_axis=None, truncate=4.0, pt=True) -> ImageData:
     """Implementation of median filter function
     Args:
         img (Image): Image/Volume to be segmented.
