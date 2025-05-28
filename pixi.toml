@@ -45,7 +45,7 @@ torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu
 onnxruntime-gpu = { version = "==1.19.*", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-11/pypi/simple/" }
 optuna = "==4.3.*"
 cupy-cuda11x = "==13.4.*"
-tensorrt = "==10.11.*"
+tensorrt = "==10.2.*"
 
 [feature.cuda12]
 system-requirements = { cuda = "12.0" }
@@ -56,7 +56,7 @@ torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu
 onnxruntime-gpu = { version = "==1.19.*", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/" }
 optuna = "==4.3.*"
 cupy-cuda12x = "==13.4.*"
-tensorrt = "==10.11.*"
+tensorrt = "==10.2.*"
 
 [feature.cpu.pypi-dependencies]
 torch = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cpu" }
