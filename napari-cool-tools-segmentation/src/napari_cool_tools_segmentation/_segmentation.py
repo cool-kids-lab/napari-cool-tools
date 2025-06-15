@@ -22,11 +22,13 @@ onnx_bscan_path = onnx_folder_parent_path / "onnx_models/bscan/"
 onnx_enface_path = onnx_folder_parent_path / "onnx_models/enface"
 onnx_enface_vessels_path = onnx_enface_path / "vessels"
 onnx_enface_optic_nerve_path = onnx_enface_path / "optic_nerve"
+onnx_enface_ridge_path = onnx_enface_path / "ridge"
 print(onnx_bscan_path)
 print(list(onnx_bscan_path.rglob("*.onnx")))
 onnx_bscan = list(onnx_bscan_path.rglob("*.onnx"))[0]
 onnx_enface_vessels = list(onnx_enface_vessels_path.rglob("*.onnx"))[0]
 onnx_enface_optic_nerve = list(onnx_enface_optic_nerve_path.rglob("*.onnx"))[0]
+onnx_enface_ridge = list(onnx_enface_ridge_path.rglob("*.onnx"))[0]
 
 @magic_factory()
 def bscan_onnx_seg_plugin(img:Image, 
@@ -180,7 +182,7 @@ def enface_popcorn_seg_func(img:Image, state_dict_path=Path("../nn_state_dicts/e
 @magic_factory()
 def enface_onnx_seg_plugin(
         img:Image,
-        segmentation:Literal["optic_nerve","vessel"] = "vessel",
+        segmentation:Literal["optic_nerve","vessel","ridge"] = "vessel",
         #onnx_path=Path("../onnx_models/enface/UWF_OCT_enface_seg_EP_200_PR_16-mixed_SD_60_05-10-2024_12h50m_every_10-epoch=0069-step=3430.onnx"),
         label_val:int=1,
         use_cpu:bool=True,
@@ -215,6 +217,8 @@ def enface_onnx_seg_plugin(
         onnx_path = onnx_enface_vessels
     elif segmentation == "optic_nerve":
         onnx_path = onnx_enface_optic_nerve
+    elif segmentation == "ridge":
+        onnx_path = onnx_enface_ridge
 
     layers_out = []
 
@@ -242,7 +246,7 @@ def enface_onnx_seg_plugin(
         'gain': 1.0
     }
 
-    final_seg = enface_onnx_seg_func(img.data,onnx_path=onnx_path,label_val=label_val,use_cpu=use_cpu,DoG=DoG,blur=blur,log_adjust=log_adjust,output_preproc=output_preproc,debug=debug)
+    final_seg = enface_onnx_seg_func(img.data,segmentation_type=segmentation,onnx_path=onnx_path,label_val=label_val,use_cpu=use_cpu,DoG=DoG,blur=blur,log_adjust=log_adjust,output_preproc=output_preproc,debug=debug)
 
     # data = img.data.copy()
 

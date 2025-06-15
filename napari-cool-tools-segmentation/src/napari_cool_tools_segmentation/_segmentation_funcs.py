@@ -285,7 +285,8 @@ def bscan_onnx_seg_func(img:ImageData,
 
 def enface_onnx_seg_func(
         data:ImageData, 
-        onnx_path=onnx_enface_vessels, 
+        onnx_path=onnx_enface_vessels,
+        segmentation_type="vessel", 
         #segmentation:Literal["optic_nerve","vessel"],
         label_val:int=1,
         use_cpu:bool=True,
@@ -350,10 +351,13 @@ def enface_onnx_seg_func(
         #data = normalize_data_in_range_pt_func()
         data = normalize_in_range(data.astype('float32'),min_val=0.0,max_val=1.0)
     elif data.dtype != 'float32':
-        ValueError(f"{data.dtype} is not supported float32, float64, and uint8 are supported")
+        raise ValueError(f"{data.dtype} is not supported float32, float64, and uint8 are supported")
 
     pt_data = torch.tensor(data,device=device)
     #print(f"pt_data shape: {pt_data.shape}\n")
+
+
+
     ch3_data = bw_1_to_3ch(pt_data,data_format='HW')
     #print(f"ch3_data shape: {ch3_data.shape}\n")
     norm_ch3_data = normalize_in_range(ch3_data,0.0,1.0)
@@ -440,6 +444,13 @@ def enface_onnx_seg_func(
     x_eq_cpu = x_eq.detach().cpu().numpy()
     pre_poc = x_eq.mean(dim=0).detach().cpu() #.numpy()
 
+    #if segmentation_type == "ridge":
+    #    print(f"\n\nRidge_segmentation input shape: {x_eq_cpu.shape}\n\n")
+    #    x_eq_cpu = x_eq_cpu[:,0,:,:]#.reshape((x_eq_cpu.shape[0],1,x_eq_cpu.shape[1],x_eq_cpu.shape[2]))
+    #    x_eq_cpu = x_eq_cpu[:,np.newaxis,:,:]
+    #    print(f"\n\nRidge_segmentation change input shape: {x_eq_cpu.shape}\n\n")
+        
+
     if pad_flag:
         pre_proc_final = pre_poc[start_0:end_0,start_1:end_1]
     elif resize_flag:
@@ -495,5 +506,7 @@ def enface_onnx_seg_func(
     gc.collect()
     torch.cuda.empty_cache()
 
+    show_info(f"Hot Reload Works Now!! Hell Yeah!!")
+    #print(f"Hot Reload Works Now!!")
 
     return final_seg

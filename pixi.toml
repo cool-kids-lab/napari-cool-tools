@@ -35,6 +35,10 @@ opencv-python = "==4.11.0.*"
 [feature.development]
 [feature.development.pypi-dependencies]
 segmentation-models-pytorch = "==0.4.0"
+tensorboard = "==2.19.0"
+notebook = "==7.4.3"
+onnx = "==1.16.2"
+qtreload = "==0.2.3"
 
 [feature.cuda11]
 system-requirements = { cuda = "11.0" }
@@ -56,7 +60,10 @@ torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu
 onnxruntime-gpu = { version = "==1.19.*", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/" }
 optuna = "==4.3.*"
 cupy-cuda12x = "==13.4.*"
-tensorrt = "==10.2.*"
+tensorrt = "==10.10.*"
+tensorrt-cu12-libs = "==10.10.*"
+tensorrt-cu12-bindings = "==10.10.*"
+
 
 [feature.cpu.pypi-dependencies]
 torch = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cpu" }
@@ -75,3 +82,6 @@ cuda12-dev = { features = ["development", "cuda12"] }
 
 ## Make CPU the default environment
 #default = { features = ["cpu"] }
+
+[environments.default]
+features = ["cuda12", "development"]
