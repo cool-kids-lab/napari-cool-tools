@@ -8,13 +8,14 @@ from tqdm import tqdm
 from napari.types import ImageData
 from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_range_func, normalize_data_in_range_pt_func
 from napari_cool_tools_io import torch, device
+from napari_cool_tools_img_proc import DType
 
-class DTYPE(Enum):
-    NP_FLOAT = 'f4' #np.dtype(np.float64)
-    NP_UINT8 = 'u1' #np.dtype(np.uint8)
+#class DTYPE(Enum):
+#    NP_FLOAT = 'f4' #np.dtype(np.float64)
+#    NP_UINT8 = 'u1' #np.dtype(np.uint8)
 
 #def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT):
-def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=255.0,dtype:DTYPE=DTYPE.NP_UINT8):
+def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=255.0,dtype:DType=DType.NP_UINT8):
     '''
     Args:
     Returns:
@@ -37,7 +38,7 @@ def background_removal_func(img:ImageData):
     output_norm = normalize_data_in_range_func(img_adjust,min_val=0,max_val=1) #(img_adjust-img_adjust.min())/(img_adjust.max()-img.min())
     return  output_norm
 
-def auto_brightness_adjust(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT,in_place:bool=True):
+def auto_brightness_adjust(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT,in_place:bool=True):
     '''
     Args:
     Returns:

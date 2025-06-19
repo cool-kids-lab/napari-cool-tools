@@ -6,12 +6,12 @@ from napari.layers import Image, Layer
 from napari.qt.threading import thread_worker
 from napari_cool_tools_io import torch,viewer,memory_stats
 from napari_cool_tools_img_proc._equalization_funcs import (
-    DTYPE,
+    DType,
     clahe_func, clahe_pt_func,
     background_removal_func, init_bscan_preproc
 )
 
-def init_bscan_preproc_plugin(img:Image,num_std:int=16,min_intensity:float=0.0,max_intensity:float=255,dtype:DTYPE=DTYPE.NP_UINT8):
+def init_bscan_preproc_plugin(img:Image,num_std:int=16,min_intensity:float=0.0,max_intensity:float=255,dtype:DType=DType.NP_UINT8):
     '''
     Args:
     Returns:
@@ -23,7 +23,7 @@ def init_bscan_preproc_plugin(img:Image,num_std:int=16,min_intensity:float=0.0,m
 
 
 @thread_worker(connect={"returned": viewer.add_layer})
-def init_bscan_preproc_thread(img:Image,num_std:int=16,min_intensity:float=0.0,max_intensity:float=255,dtype:DTYPE=DTYPE.NP_UINT8)->Layer:
+def init_bscan_preproc_thread(img:Image,num_std:int=16,min_intensity:float=0.0,max_intensity:float=255,dtype:DType=DType.NP_UINT8)->Layer:
     '''
     Args:
     Returns:
