@@ -3,7 +3,7 @@ This module contains function code for segmenting images
 """
 import gc
 import platform
-from pathlib import Path
+#from pathlib import Path
 from typing import List, Tuple, Literal
 
 import numpy as np
@@ -13,24 +13,11 @@ from napari.utils.notifications import show_info
 from napari.layers import Image, Layer
 from napari.types import ImageData
 from napari_cool_tools_io import torch,viewer,device,memory_stats
-
-
-this_file_path = Path(__file__)
-onnx_folder_parent_path = this_file_path.parents[3]
-onnx_bscan_path = onnx_folder_parent_path / "onnx_models/bscan/"
-onnx_enface_path = onnx_folder_parent_path / "onnx_models/enface"
-onnx_enface_vessels_path = onnx_enface_path / "vessels"
-onnx_enface_optic_nerve_path = onnx_enface_path / "optic_nerve"
-print(onnx_bscan_path)
-print(list(onnx_bscan_path.rglob("*.onnx")))
-onnx_bscan = list(onnx_bscan_path.rglob("*.onnx"))[0]
-onnx_enface_vessels = list(onnx_enface_vessels_path.rglob("*.onnx"))[0]
-onnx_enface_optic_nerve = list(onnx_enface_optic_nerve_path.rglob("*.onnx"))[0]
+from napari_cool_tools_segmentation import Path, BscanSegmentationType, EnfaceSegmentationType #onnx_bscan, onnx_enface_vessels, onnx_enface_ridge
 
 
 def bscan_onnx_seg_func(img:ImageData,
-                        #onnx_path=Path("../onnx_models/bscan/UWF_OCT_Bscan_seg_TD_Full_EP_250_PR_16-mixed_SD_60_06-23-2024_19h21m_top_10-epoch=0247-step=17856/UWF_OCT_Bscan_seg_TD_Full_EP_250_PR_16-mixed_SD_60_06-23-2024_19h21m_top_10-epoch=0247-step=17856.onnx"),
-                        onnx_path=onnx_bscan,
+                        onnx_path=BscanSegmentationType.BSCAN.value,
                         batch_size:int=32, num_workers:int=0,
                         gpu_limit:int=6,
                         use_cpu:bool=True,output_preproc:bool=False,old_preproc:bool=False,debug:bool=False):
@@ -120,14 +107,6 @@ def bscan_onnx_seg_func(img:ImageData,
                     shuffle=False,
                     num_workers=num_workers)
 
-    #bscan_preproc = BscanPreproc2(**bscan_preproc_params)
-    #bscan_preproc.to(processor)
-
-    #img_tensor = torch.tensor(img.copy())
-    #target_idx = int(len(img_tensor) / 2)
-    #offset = 20
-    #img_tensor = img_tensor[target_idx-offset:target_idx+offset]
-    #img_tensor.to(processor)
 
     if use_cpu:
         providers = ['CPUExecutionProvider',]
@@ -285,7 +264,7 @@ def bscan_onnx_seg_func(img:ImageData,
 
 def enface_onnx_seg_func(
         data:ImageData, 
-        onnx_path=onnx_enface_vessels,
+        onnx_path=EnfaceSegmentationType.VESSEL.value,
         segmentation_type="vessel", 
         #segmentation:Literal["optic_nerve","vessel"],
         label_val:int=1,
@@ -315,7 +294,6 @@ def enface_onnx_seg_func(
     from kornia.filters import gaussian_blur2d
     from onnxruntime import InferenceSession
 
-    #r"D:\\JJ\Development\\COOL_Tools_plugin\\onnx_models\\UWF_OCT_enface_seg_EP_200_PR_16-mixed_SD_60_05-10-2024_12h50m_every_10-epoch=0069-step=3430.onnx"
 
     layers_out = []
 
@@ -443,12 +421,6 @@ def enface_onnx_seg_func(
 
     x_eq_cpu = x_eq.detach().cpu().numpy()
     pre_poc = x_eq.mean(dim=0).detach().cpu() #.numpy()
-
-    #if segmentation_type == "ridge":
-    #    print(f"\n\nRidge_segmentation input shape: {x_eq_cpu.shape}\n\n")
-    #    x_eq_cpu = x_eq_cpu[:,0,:,:]#.reshape((x_eq_cpu.shape[0],1,x_eq_cpu.shape[1],x_eq_cpu.shape[2]))
-    #    x_eq_cpu = x_eq_cpu[:,np.newaxis,:,:]
-    #    print(f"\n\nRidge_segmentation change input shape: {x_eq_cpu.shape}\n\n")
         
 
     if pad_flag:
