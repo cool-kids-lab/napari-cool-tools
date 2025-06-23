@@ -14,10 +14,12 @@ from tqdm import tqdm
 #from pypcd4 import PointCloud
 #from napari_cool_tools_io
 
-from napari_cool_tools_img_proc._equalization_funcs import init_bscan_preproc, DTYPE
+from napari_cool_tools_img_proc import DType
+from napari_cool_tools_img_proc._equalization_funcs import init_bscan_preproc
+from napari_cool_tools_segmentation import EnfaceSegmentationType
 #from napari_cool_tools_vol_proc._projection_tools import mip
 from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import generate_enface
-from napari_cool_tools_segmentation._segmentation_funcs import enface_onnx_seg_func, onnx_enface_ridge
+from napari_cool_tools_segmentation._segmentation_funcs import enface_onnx_seg_func
 from napari_cool_tools_io import torch
 
 @magicgui(
@@ -42,13 +44,16 @@ def generate_enface_with_labels(fold_dir: Path = Path(r"D:\JJ\Projects\Segmentat
         oct_data_layer = viewer.layers[-1]
 
         data = viewer.layers[-1].data
-        init_data = init_bscan_preproc(data, num_std=16,min_intensity=0.0,max_intensity=1.0,dtype=DTYPE.NP_FLOAT)
+        init_data = init_bscan_preproc(data, num_std=16,min_intensity=0.0,max_intensity=1.0,dtype=DType.NP_FLOAT)
         
         viewer.layers.remove(oct_data_layer)
         
         viewer.add_image(init_data)
         init_oct_data_layer = viewer.layers[-1]
         #mip_data = mip
+
+        onnx_enface_ridge = EnfaceSegmentationType.RIDGE.value
+
         enface_data = list(generate_enface(data,sin_correct=False,CLAHE=True,clahe_clip=2.5,log_correct=True,log_gain=1.0))[0][0]
         init_enface_data = list(generate_enface(init_data,sin_correct=False,CLAHE=True,clahe_clip=2.5,log_correct=True,log_gain=1.0))[0][0]
         ridge_labels = enface_onnx_seg_func(enface_data,onnx_path=onnx_enface_ridge,segmentation_type="ridge",label_val=4,use_cpu=True,blur=False)
