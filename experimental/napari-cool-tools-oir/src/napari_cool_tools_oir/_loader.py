@@ -142,7 +142,6 @@ def _on_init(widget):
     save_button=dict(widget_type="PushButton", text="Save"),
     octa={"label":"OCTA Mat File", "widget_type": "FileEdit", 'mode': 'r', 'filter': '*.mat'}
     )
-
 def load_segmentation_data(octa: Path, load_button, input_image: Image, predict_button, segmentation_label: Labels, save_button):
 
     return
