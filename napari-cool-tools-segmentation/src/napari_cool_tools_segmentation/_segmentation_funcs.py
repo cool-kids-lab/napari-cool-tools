@@ -4,15 +4,14 @@ This module contains function code for segmenting images
 import gc
 import platform
 #from pathlib import Path
-from typing import List, Tuple, Literal
+from typing import List
 
 import numpy as np
 from tqdm import tqdm
 
-from napari.utils.notifications import show_info
-from napari.layers import Image, Layer
+from napari.layers import Layer
 from napari.types import ImageData
-from napari_cool_tools_io import torch,viewer,device,memory_stats
+from napari_cool_tools_io import torch, device
 from napari_cool_tools_segmentation import Path, BscanSegmentationType, EnfaceSegmentationType #onnx_bscan, onnx_enface_vessels, onnx_enface_ridge
 
 
@@ -28,7 +27,7 @@ def bscan_onnx_seg_func(img:ImageData,
     from torch.utils.data import DataLoader
     from torchvision.transforms.functional import InterpolationMode
     from jj_nn_framework.data_setup import LoadNumpyData
-    from jj_nn_framework.nn_transforms import (PadToTargetM,IntTarget,BscanPreproc2,NormalizeCLAHE2,ResizeToFit)
+    from jj_nn_framework.nn_transforms import (PadToTargetM,BscanPreproc2,NormalizeCLAHE2,ResizeToFit)
 
     target_shape = (992,800)
     init_shape = (img.shape[-2],img.shape[-1])
@@ -68,11 +67,6 @@ def bscan_onnx_seg_func(img:ImageData,
         'value': None,
         'pad_gt': False,
         'device': processor
-    }
-
-    norm_clahe = {
-        "log_gain": 2.5,
-        'clahe_clip_limit': 1.0,
     }
 
     bscan_preproc_params = {
@@ -287,31 +281,18 @@ def enface_onnx_seg_func(
         Labels Layer containing B-scan segmentations with '_Seg' suffix added to name.
     """
     from napari_cool_tools_io import device
-    from jj_nn_framework.image_funcs import normalize_in_range, pad_to_target_2d, pad_to_targetM_2d, bw_1_to_3ch
+    from jj_nn_framework.image_funcs import normalize_in_range, pad_to_targetM_2d, bw_1_to_3ch
     from jj_nn_framework.nn_transforms import DiffOfGausPred
     from torchvision.transforms import v2
     from kornia.enhance import equalize_clahe, adjust_log
     from kornia.filters import gaussian_blur2d
     from onnxruntime import InferenceSession
 
-
-    layers_out = []
-
     if use_cpu:
         device = 'cpu'
 
     pad_flag = False
     resize_flag = False
-
-    pttm_params = {
-        'h': 864,
-        'w': 864,
-        'X_data_format': 'NCHW',
-        'y_data_format': 'NHW',
-        'mode': 'constant',
-        'value': None,
-        'device': device
-    }
 
     dog_params = {
         'low_sigma': 0.5, #0.0, #1.0,
@@ -333,8 +314,6 @@ def enface_onnx_seg_func(
 
     pt_data = torch.tensor(data,device=device)
     #print(f"pt_data shape: {pt_data.shape}\n")
-
-
 
     ch3_data = bw_1_to_3ch(pt_data,data_format='HW')
     #print(f"ch3_data shape: {ch3_data.shape}\n")
@@ -359,13 +338,6 @@ def enface_onnx_seg_func(
 
     out = mod_data.detach().cpu().numpy().squeeze()
 
-    if debug == True:
-        name = f"{img.name}_Pad"
-        add_kwargs = {"name":f"{name}"}
-        layer_type = "image"
-        layer_padded = Layer.create(out,add_kwargs,layer_type)
-        layers_out.append(layer_padded)
-
     if pad_flag:
         offset_0 = out[0].shape[0] - data.shape[0]
         offset_1 = out[0].shape[1] - data.shape[1]
@@ -383,60 +355,21 @@ def enface_onnx_seg_func(
     #x_eq = equalize_clahe(x_norm2)
     x_eq = equalize_clahe(x_norm2,clip_limit=3.0)
 
-    if log_adjust == True:
+    if log_adjust:
         #x_eq = adjust_log(x,gain=1)
         x_eq = adjust_log(x_eq,gain=1)
 
-    if DoG == True:
+    if DoG:
         diff_of_gauss = DiffOfGausPred(**dog_params)
         x_eq = diff_of_gauss(x_eq)
 
-    if blur == True:
+    if blur:
         x_eq = gaussian_blur2d(x_eq,kernel_size=3,sigma=(1.0,1.0),border_type='reflect')
         #x = normalize_in_range(x_eq,0,1)
         x_eq = normalize_in_range(x_eq,0,1)
 
-    #print(f"x shape: {x_eq.shape}\n")
-
-    ENCODER = "efficientnet-b5"
-    ENCODER_WEIGHTS = "imagenet"
-    CLASSES = [
-        "vessel"
-    ]
-    ACTIVATION = "sigmoid"
-
-    '''
-    model = smp.Unet(encoder_name=ENCODER, # smp.UnetPlusPlus(encoder_name=ENCODER,
-                    encoder_weights=ENCODER_WEIGHTS,
-                    classes=len(CLASSES),
-                    activation=ACTIVATION)
-    state_dict = torch.load(state_dict_path,map_location=device)
-    model.load_state_dict(state_dict)
-    model.eval()
-    model_dev = model.to(device)
-    output = model_dev.predict(x_eq)
-    '''
-
-    #show_info(f'x_eq: {x_eq.shape}')
 
     x_eq_cpu = x_eq.detach().cpu().numpy()
-    pre_poc = x_eq.mean(dim=0).detach().cpu() #.numpy()
-        
-
-    if pad_flag:
-        pre_proc_final = pre_poc[start_0:end_0,start_1:end_1]
-    elif resize_flag:
-        pre_proc_final = v2.functional.resize(pre_poc,original_shape,interpolation=v2.InterpolationMode.BICUBIC)
-    else:
-        pre_proc_final = pre_poc
-
-    if output_preproc == True:
-        name = f"{img.name}_Preproc"
-        add_kwargs = {"name":f"{name}"}
-        layer_type = "image"
-
-        layer = Layer.create(pre_proc_final.squeeze().numpy(),add_kwargs,layer_type)
-        layers_out.append(layer)
 
     # start onnx
     onnx_session = InferenceSession(onnx_path)
