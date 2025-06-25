@@ -3,18 +3,13 @@ This module contains code for OCT data preprocessing functions.
 """
 import sys
 import traceback
-import logging
 import gc
-import numpy as np
-from enum import Enum
 from tqdm import tqdm
-from typing import List, Generator
+from typing import Generator
 from napari.utils.notifications import show_info
-from napari.layers import Layer
 from napari.types import ImageData
 from napari_cool_tools_img_proc._equalization_funcs import clahe_pt_func
 from napari_cool_tools_img_proc._luminance_funcs import adjust_log_pt_func
-from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_range_pt_func
 from napari_cool_tools_io import torch
 from napari_cool_tools_registration._registration_tools_funcs import a_scan_correction_func2
 from napari_cool_tools_vol_proc._averaging_tools_funcs import average_per_bscan_pt
@@ -50,33 +45,7 @@ def data_augmentation(vol:ImageData,
                        g_blur_bt = 'reflect',
                        )->ImageData:
     """"""
-    from jj_nn_framework.nn_transforms import BscanPreproc, NapStandNorm, NapStandNormLog, NapStandNormLogCLAHE, NapCondCLAHELog, NapRandResizeAspectRatio
-
-    bscan_preproc = BscanPreproc(
-        log_gain=log_gain,
-        clahe_clip_limit=clahe_clip_limit,
-        b_blur_ks=b_blur_ks,
-        b_blur_sc=b_blur_sc,
-        b_blur_ss=b_blur_ss,
-        b_blur_bt=b_blur_bt,
-        g_blur_ks=g_blur_ks,
-        g_blur_s=g_blur_s,
-        g_blur_bt=g_blur_bt
-    )
-
-    stand_norm_log = NapStandNormLog(
-        log_gain=log_gain,
-        clahe_clip_limit=clahe_clip_limit,
-    )
-
-    stand_norm_log_clahe = NapStandNormLogCLAHE(
-        log_gain=log_gain,
-        clahe_clip_limit=clahe_clip_limit,
-    )
-
-    stand_norm = NapStandNorm()
-
-    cond_clahe_log = NapCondCLAHELog(log_cor=log_cor)
+    from jj_nn_framework.nn_transforms import NapRandResizeAspectRatio
 
     rand_resized_aspect = NapRandResizeAspectRatio(fov=fov)
 
@@ -107,7 +76,7 @@ def data_augmentation(vol:ImageData,
         print(f"out_pt_batch shape: {out_pt_batch.shape}\n")
 
 
-    if vol_proc == True:
+    if vol_proc:
 
         # select preprocessing preset
         if transform == Augmentation.RandCropResizeAspectRat:
@@ -296,7 +265,7 @@ def preproc_bscan(vol:ImageData,
         print(f"out_pt_batch shape: {out_pt_batch.shape}\n")
 
 
-    if vol_proc == True:
+    if vol_proc:
 
         # select preprocessing preset
         if transform == Preproc.NLCGbBb:
@@ -462,7 +431,7 @@ def generate_enface(
 
     #show_info(f'Generate enface image thread has started')
 
-    show_info(f'Generating initial enface MIP')
+    show_info('Generating initial enface MIP')
     yx = data.transpose(1,2,0)
     #enface_mip = yx.max(0)
     enface_mip = return_enface_accumulation(yx,accumulation_type=projection_type,axis=0)
@@ -482,7 +451,7 @@ def generate_enface(
         yield (correct_mip,suffix)
 
     if sin_correct:
-        show_info(f'Correcting enface MIP distortion')
+        show_info('Correcting enface MIP distortion')
         ac_correct_mip = a_scan_correction_func2(correct_mip.copy())
 
         if ac_correct_mip.ndim == 2:
@@ -498,14 +467,14 @@ def generate_enface(
     else:
         pass    
     
-    show_info(f'Calculating Optimal Subregions for subpixel registration')
+    show_info('Calculating Optimal Subregions for subpixel registration')
     
 
     settings = a_scan_reg_calc_settings(correct_mip)
     if debug:
         show_info(f"{settings['region_num']}")
 
-    show_info(f'Completing subpixel registration of A-scans')
+    show_info('Completing subpixel registration of A-scans')
     #outs = list(a_scan_reg_subpix_gen(correct_mip_layer,settings))
     outs = list(a_scan_subpix_registration(correct_mip,settings=settings,fill_gaps=True,roll_over_flag=False,debug=debug))
 
@@ -560,7 +529,7 @@ def generate_octa_var(
     #outputs = []
 
     if mscans < 2:
-        raise RuntimeError(f"OCTA processing requires at least 2 M-scans to function")
+        raise RuntimeError("OCTA processing requires at least 2 M-scans to function")
     
     new_shape = (-1,mscans,data.shape[-2],data.shape[-1])
     m_comp = data.reshape(new_shape)
@@ -607,7 +576,7 @@ def generate_octa(
     #outputs = []
 
     if mscans < 2:
-        raise RuntimeError(f"OCTA processing requires at least 2 M-scans to function")
+        raise RuntimeError("OCTA processing requires at least 2 M-scans to function")
     
     new_shape = (-1,mscans,data.shape[-2],data.shape[-1])
     m_comp = data.reshape(new_shape)
@@ -634,9 +603,6 @@ def generate_octa(
     
     #out_data = out_data.max(axis=1)
     #out_data = out_data.transpose(1,0)
-
-    if ascan_corr:
-        sin_correct = True
 
     out_data = next(generate_enface(out_data,sin_correct=ascan_corr,exp=False,CLAHE=True,clahe_clip=2.5,log_correct=True,log_gain=1,band_pass_filter=False))[0]
 
