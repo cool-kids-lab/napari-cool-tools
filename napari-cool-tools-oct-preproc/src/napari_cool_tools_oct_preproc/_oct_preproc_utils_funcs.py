@@ -18,22 +18,15 @@ from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_ra
 from napari_cool_tools_io import torch
 from napari_cool_tools_registration._registration_tools_funcs import a_scan_correction_func2
 from napari_cool_tools_vol_proc._averaging_tools_funcs import average_per_bscan_pt
+from napari_cool_tools_oct_preproc import Augmentation,EnfaceAccumulation,OCTACalc,Preproc
 
-class Preproc(Enum):
-    NLCGbBb = "Norm_Log_CLAHE_Gblur_Bblur"
-    SNLC = "Stand_Nom_Log_CLAHE"
-    SNL = "Stand_Norm_Log"
-    SN = "Stand_Norm"
-    CCL = "Conditional_CLAHE_Log"
-    RRAR = "Random_Resized_Aspect_Ratio"
-
-class Augmentation(Enum):
-    RandCropResizeAspectRat = "Random_Crop_Resized_Aspect_Ratio"
-
-class OCTACalc(Enum):
-    STD = "Standard Deviation"
-    VAR = "Variance"
-    VAR2 = "Variance Squared"
+def return_enface_accumulation(data:ImageData,accumulation_type:EnfaceAccumulation=EnfaceAccumulation.MAX,axis:int=1):
+    if accumulation_type == EnfaceAccumulation.MAX:
+        return data.max(axis=axis)
+    if accumulation_type == EnfaceAccumulation.MEAN:
+        return data.mean(axis=axis)
+    if accumulation_type == EnfaceAccumulation.MIN:
+        return data.min(axis=axis)
 
 def data_augmentation(vol:ImageData, 
                        transform:Augmentation=Augmentation.RandCropResizeAspectRat,
@@ -434,6 +427,7 @@ def preproc_bscan(vol:ImageData,
 
 def generate_enface(
     data:ImageData,
+    projection_type:EnfaceAccumulation=EnfaceAccumulation.MAX,
     sin_correct:bool=True,
     exp:bool=False,
     n:float=2,
@@ -470,7 +464,8 @@ def generate_enface(
 
     show_info(f'Generating initial enface MIP')
     yx = data.transpose(1,2,0)
-    enface_mip = yx.max(0)
+    #enface_mip = yx.max(0)
+    enface_mip = return_enface_accumulation(yx,accumulation_type=projection_type,axis=0)
     print(f"enface_mip shape: {enface_mip.shape}\n")
 
     if debug:

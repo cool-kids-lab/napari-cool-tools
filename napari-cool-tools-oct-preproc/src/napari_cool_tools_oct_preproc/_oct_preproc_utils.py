@@ -10,7 +10,8 @@ from napari.layers import Image, Layer
 from napari.types import ImageData
 from napari.qt.threading import thread_worker
 from napari_cool_tools_io import torch,viewer,memory_stats
-from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import preproc_bscan, data_augmentation, generate_octa, generate_enface, Preproc, Augmentation, OCTACalc
+from napari_cool_tools_oct_preproc import Augmentation,EnfaceAccumulation,OCTACalc,Preproc
+from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import preproc_bscan, data_augmentation, generate_octa, generate_enface
 import scipy
 import skimage
 
@@ -81,6 +82,7 @@ def resize_image_thread(
 
 def generate_enface_plugin(
     img:Image,
+    projection_type:EnfaceAccumulation=EnfaceAccumulation.MAX,
     sin_correct:bool=True,
     exp:bool=False,
     n:float=2,
@@ -107,6 +109,7 @@ def generate_enface_plugin(
     """
     generate_enface_thread(
         img=img,
+        projection_type=projection_type,
         sin_correct=sin_correct,
         exp=exp,
         n=n,
@@ -125,6 +128,7 @@ def generate_enface_plugin(
 @thread_worker(connect={"yielded": viewer.add_layer})
 def generate_enface_thread(
     img:Image,
+    projection_type:EnfaceAccumulation=EnfaceAccumulation.MAX,
     sin_correct:bool=True,
     exp:bool=False,
     n:float=2,
@@ -156,6 +160,7 @@ def generate_enface_thread(
     
     output = generate_enface(
         data=img.data,
+        projection_type=projection_type,
         sin_correct=sin_correct,
         exp=exp,
         n=n,
