@@ -478,7 +478,4 @@ def enface_onnx_seg_func(
     gc.collect()
     torch.cuda.empty_cache()
 
-    show_info(f"Hot Reload Works Now!! Hell Yeah!!")
-    #print(f"Hot Reload Works Now!!")
-
     return final_seg
