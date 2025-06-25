@@ -15,7 +15,7 @@ from napari_cool_tools_img_proc import DType
 #    NP_UINT8 = 'u1' #np.dtype(np.uint8)
 
 #def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT):
-def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=255.0,dtype:DType=DType.NP_UINT8):
+def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT):
     '''
     Args:
     Returns:
@@ -38,7 +38,7 @@ def background_removal_func(img:ImageData):
     output_norm = normalize_data_in_range_func(img_adjust,min_val=0,max_val=1) #(img_adjust-img_adjust.min())/(img_adjust.max()-img.min())
     return  output_norm
 
-def auto_brightness_adjust(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT,in_place:bool=True):
+def auto_brightness_adjust(img:ImageData,num_std:int=16,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT,in_place:bool=True):
     '''
     Args:
     Returns:
