@@ -15,7 +15,7 @@ from napari_cool_tools_img_proc import DType
 #    NP_UINT8 = 'u1' #np.dtype(np.uint8)
 
 #def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT):
-def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT):
+def init_bscan_preproc(img:ImageData,num_std:int=16,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT):
     '''
     Args:
     Returns:
