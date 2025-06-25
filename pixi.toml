@@ -40,15 +40,18 @@ notebook = "==7.4.3"
 onnx = "==1.16.2"
 qtreload = "==0.2.3"
 
-#[feature.pointcloud]
-#[feature.pointcloud.pypi-dependencies]
+[feature.visualization]
+[feature.visualization.pypi-dependencies]
 #open3d = "==0.19.0"
-#pypcd4 = "==1.2.1"
+pypcd4 = "==1.2.1"
 #pptk = "==0.1.0"
+pyvista = "==0.45.*"
+pyvistaqt = "==0.11.*"
 
 [feature.cuda11]
 system-requirements = { cuda = "11.0" }
 [feature.cuda11.pypi-dependencies]
+nvidia-cuda-runtime-cu11 = "==11.8.*"
 torch = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu118" }
 torchvision = { version = "==0.19.*", index = "https://download.pytorch.org/whl/cu118" }
 torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu118" }
@@ -56,19 +59,22 @@ onnxruntime-gpu = { version = "==1.19.*", index = "https://aiinfra.pkgs.visualst
 optuna = "==4.3.*"
 cupy-cuda11x = "==13.4.*"
 tensorrt = "==10.2.*"
+tensorrt-cu11-libs = "==10.2.*"
+tensorrt-cu11-bindings = "==10.2.*"
 
 [feature.cuda12]
 system-requirements = { cuda = "12.0" }
 [feature.cuda12.pypi-dependencies]
+nvidia-cuda-runtime-cu12 = "==12.4.*"
 torch = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = "==0.19.*", index = "https://download.pytorch.org/whl/cu124" }
 torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cu124" }
 onnxruntime-gpu = { version = "==1.19.*", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/" }
 optuna = "==4.3.*"
 cupy-cuda12x = "==13.4.*"
-tensorrt = "==10.10.*"
-tensorrt-cu12-libs = "==10.10.*"
-tensorrt-cu12-bindings = "==10.10.*"
+tensorrt = "==10.2.*"
+tensorrt-cu12-libs = "==10.2.*"
+tensorrt-cu12-bindings = "==10.2.*"
 
 
 [feature.cpu.pypi-dependencies]
@@ -84,11 +90,10 @@ cuda11 = { features = ["cuda11"] }
 cuda12 = { features = ["cuda12"] }
 cpu-dev = { features =  ["development","cpu"] }
 cuda11-dev = { features = ["development", "cuda11"] }
-cuda12-dev = { features = ["development", "cuda12"] }
-#cuda12-dev = { features = ["development", "cuda12", "pointcloud"] }
+#cuda12-dev = { features = ["development", "cuda12"] }
+cuda12-dev = { features = ["development", "cuda12", "visualization"] }
 
 ## Make CPU the default environment
 #default = { features = ["cpu"] }
 
-[environments.default]
-features = ["cuda12", "development"]
+
