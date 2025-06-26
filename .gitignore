@@ -172,3 +172,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Onnx binary cache files:
+.engine
+.timing
+.profile
