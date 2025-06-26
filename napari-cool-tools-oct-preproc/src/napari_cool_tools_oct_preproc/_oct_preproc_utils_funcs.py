@@ -455,7 +455,7 @@ def generate_enface(
         normalize_data_in_range_pt_func,
     )
     from napari_cool_tools_registration._registration_tools_funcs import (
-        a_scan_reg_calc_settings,
+        a_scan_reg_calc_settings_func,
         a_scan_subpix_registration,
     )
 
@@ -505,7 +505,7 @@ def generate_enface(
 
     show_info("Calculating Optimal Subregions for subpixel registration")
 
-    settings = a_scan_reg_calc_settings(correct_mip)
+    settings = a_scan_reg_calc_settings_func(correct_mip)
     if debug:
         show_info(f"{settings['region_num']}")
 
