@@ -1,23 +1,25 @@
-
-from pathlib import Path
-from shutil import copyfile
-from typing import Literal,Tuple
-import xml.etree.ElementTree as ET
 import os
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Literal, Tuple
 
 import napari
-from napari.qt import thread_worker
 import numpy as np
-from magicgui import magicgui
-from scipy.ndimage import fourier_shift
 import torch
-from torchvision.transforms import v2,InterpolationMode
-#from tqdm import tqdm
-from magicgui.tqdm import tqdm
+from magicgui import magicgui
 
+# from tqdm import tqdm
+from magicgui.tqdm import tqdm
+from napari.qt import thread_worker
 from napari_cool_tools_img_proc._equalization_funcs import clahe_pt_func
-from napari_cool_tools_img_proc._normalization_funcs import standardize_data_func, normalize_data_in_range_pt_func
 from napari_cool_tools_img_proc._luminance_funcs import adjust_log_pt_func
+from napari_cool_tools_img_proc._normalization_funcs import (
+    normalize_data_in_range_pt_func,
+    standardize_data_func,
+)
+from scipy.ndimage import fourier_shift
+from torchvision.transforms import InterpolationMode, v2
+
 
 @thread_worker(progress=True)  # give us an indeterminate progress bar
 def ndarray_tofile_thread(path, data):
@@ -45,23 +47,23 @@ def generate_fast_curve_correction(
     SLO_dir: Path = Path(r"D:\JJ\Projects\SLO_Data\2025\\"),
     output_dir: Path = Path("D:\JJ\Projects\SLO_Data\Stacked\\"),
     output_file_suffix: str = "stacked",
-    align_ascans:bool=True,
-    subpixel_reg:bool=True,
-    shift_direction:Literal[-1,1] = -1,
-    scale_factor:Tuple[float,float]=(1.0,0.25),
-    stack:bool=True,
-    process_SLO:bool=True,
-    standardize:bool=True,
-    normalize:bool=True,
-    min_val:float = 0.0,
-    max_val:float = 1.0,
-    log_adjust:bool=True,
-    gain:float = 1.0,
-    CLAHE:bool = True,
-    clip_limit:float = 2.5,
-    save_file:bool=True,
-    verbose:bool=False,
-    ):
+    align_ascans: bool = True,
+    subpixel_reg: bool = True,
+    shift_direction: Literal[-1, 1] = -1,
+    scale_factor: Tuple[float, float] = (1.0, 0.25),
+    stack: bool = True,
+    process_SLO: bool = True,
+    standardize: bool = True,
+    normalize: bool = True,
+    min_val: float = 0.0,
+    max_val: float = 1.0,
+    log_adjust: bool = True,
+    gain: float = 1.0,
+    CLAHE: bool = True,
+    clip_limit: float = 2.5,
+    save_file: bool = True,
+    verbose: bool = False,
+):
     """
     Stacks .SLO files along new z axis.
 
@@ -76,17 +78,17 @@ def generate_fast_curve_correction(
     # Get SLO paths
     slo_paths = list(SLO_dir.rglob("*.SLO"))
     if str(output_dir) == ".":
-        output_dir = SLO_dir #Path.cwd()
+        output_dir = SLO_dir  # Path.cwd()
 
-    os.makedirs(str(output_dir),exist_ok=True)
+    os.makedirs(str(output_dir), exist_ok=True)
 
     if verbose:
-        print(output_dir,list(slo_paths))
+        print(output_dir, list(slo_paths))
 
-    test_paths = [slo_paths[0]]
+    #test_paths = [slo_paths[0]]
     # Iterate through paths
     # for slo_path in test_paths:
-    for slo_path in tqdm(slo_paths,desc="Stacking .SLO data"):
+    for slo_path in tqdm(slo_paths, desc="Stacking .SLO data"):
         # get metadata
         path_parent = slo_path.parent
         path_stem = slo_path.stem
@@ -97,7 +99,7 @@ def generate_fast_curve_correction(
             print(f"getting meta data from {xml_path}.")
         slo_tree = ET.parse(xml_path)
         root = slo_tree.getroot()
-        xml_image_size = root[0].find('Image_Size')
+        xml_image_size = root[0].find("Image_Size")
         height = int(xml_image_size.get("Width"))
         width = int(xml_image_size.get("Height"))
         if verbose:
@@ -105,7 +107,9 @@ def generate_fast_curve_correction(
 
         # define chunks as little endian f32 4 byte floats with HEIGHT values
         # per row and WIDTH values per column
-        mip_z = np.dtype(("<f8", (height, width)))  # saved as double precision f64 8 byte
+        mip_z = np.dtype(
+            ("<f8", (height, width))
+        )  # saved as double precision f64 8 byte
         enface = np.fromfile(slo_path, dtype=mip_z, count=-1)
 
         # orient A-scans to align
@@ -129,9 +133,7 @@ def generate_fast_curve_correction(
 
             for i in range(depth):
                 for j in range(height):
-                    interp_sin_lin[i, j, :] = np.interp(
-                        Xn, x_org, display[i, j, :]
-                    )
+                    interp_sin_lin[i, j, :] = np.interp(Xn, x_org, display[i, j, :])
 
             display[:] = interp_sin_lin[:]
 
@@ -149,7 +151,9 @@ def generate_fast_curve_correction(
             )
 
             input_ = np.fft.fft2(odd)
-            result = fourier_shift(input_, (0.0, 0.0, shift_direction*shift[2]), axis=2)
+            result = fourier_shift(
+                input_, (0.0, 0.0, shift_direction * shift[2]), axis=2
+            )
             result = np.fft.ifft2(result)
             odd_shift = result.real
 
@@ -167,19 +171,23 @@ def generate_fast_curve_correction(
             scale_factor_t = torch.Tensor(scale_factor)
             display_shape_t = torch.Tensor(display.shape[1:])
             new_shape_t = (scale_factor_t * display_shape_t).to(torch.uint32)
-            #new_shape = new_shape_t.round().to(torch.uint32).numpy().astype(np.uint32)
+            # new_shape = new_shape_t.round().to(torch.uint32).numpy().astype(np.uint32)
             if verbose:
-                print(f"{scale_factor_t} x {display_shape_t} = {new_shape_t}") #: {new_shape}")
+                print(
+                    f"{scale_factor_t} x {display_shape_t} = {new_shape_t}"
+                )  #: {new_shape}")
             # new_size = torch.Tensor(scale_factor)*torch.Tensor(display.shape[1:]).round().numpy().astype(np.uint8)
             # print(f"new size: {new_size}")
-            display = v2.functional.resize(torch.from_numpy(display),new_shape_t,InterpolationMode.BILINEAR).numpy()
-        
+            display = v2.functional.resize(
+                torch.from_numpy(display), new_shape_t, InterpolationMode.BILINEAR
+            ).numpy()
+
         # stack files
         if stack:
-            _,scaled_height,scaled_width = display.shape
+            _, scaled_height, scaled_width = display.shape
             if verbose:
                 print(f"shape before: {display.shape}")
-            display = display.reshape(-1,scaled_height//2,scaled_width)
+            display = display.reshape(-1, scaled_height // 2, scaled_width)
             if verbose:
                 print(f"shape after: {display.shape}")
 
@@ -187,14 +195,16 @@ def generate_fast_curve_correction(
             if standardize:
                 display = standardize_data_func(display)
             if normalize:
-                display = normalize_data_in_range_pt_func(display,min_val=min_val,max_val=max_val)
+                display = normalize_data_in_range_pt_func(
+                    display, min_val=min_val, max_val=max_val
+                )
             if log_adjust:
-                display = adjust_log_pt_func(display,gain=gain)
+                display = adjust_log_pt_func(display, gain=gain)
             if CLAHE:
-                display = clahe_pt_func(display,clip_limit=clip_limit)
+                display = clahe_pt_func(display, clip_limit=clip_limit)
 
         # save files
-        viewer.add_image(display,name=slo_path.name)
+        viewer.add_image(display, name=slo_path.name)
 
         if save_file:
             ouput_name = f"{path_stem}_{output_file_suffix}.SLO"
@@ -202,23 +212,24 @@ def generate_fast_curve_correction(
             output_slo_file = output_dir / ouput_name
             output_slo_metadata = output_dir / output_meta_data_name
             if verbose:
-                print(f"Saving file:\n{output_slo_file}\nand its metadata:\n{output_slo_metadata}\n")
-            
+                print(
+                    f"Saving file:\n{output_slo_file}\nand its metadata:\n{output_slo_metadata}\n"
+                )
+
             # modify metadata and save
-            xml_image_size.set('Height',str(display.shape[-2]))
-            xml_image_size.set('Width',str(display.shape[-1]))
+            xml_image_size.set("Height", str(display.shape[-2]))
+            xml_image_size.set("Width", str(display.shape[-1]))
             slo_tree.write(output_slo_metadata)
-            #copyfile(xml_path,output_slo_metadata)
+            # copyfile(xml_path,output_slo_metadata)
 
             # save .SLO using threads
             # reverse flip and transpose that occured upon loading
             worker = ndarray_tofile_thread(output_slo_file, display)
             worker.start()
 
-    #viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
+    # viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
     viewer.show()
     napari.run()
-
 
 
 generate_fast_curve_correction.show(run=True)
