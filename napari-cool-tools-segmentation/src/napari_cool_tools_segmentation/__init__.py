@@ -1,15 +1,12 @@
 __version__ = "0.0.1"
 
-__all__ = (
-    )
+__all__ = ()
 
 from enum import Enum
 from pathlib import Path
 
 import napari
 import torch
-import kornia
-
 
 viewer = napari.current_viewer()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,8 +25,10 @@ onnx_enface_vessels = list(onnx_enface_vessels_path.rglob("*.onnx"))[0]
 onnx_enface_optic_nerve = list(onnx_enface_optic_nerve_path.rglob("*.onnx"))[0]
 onnx_enface_ridge = list(onnx_enface_ridge_path.rglob("*.onnx"))[0]
 
+
 class BscanSegmentationType(Enum):
     BSCAN = onnx_bscan
+
 
 class EnfaceSegmentationType(Enum):
     VESSEL = onnx_enface_vessels

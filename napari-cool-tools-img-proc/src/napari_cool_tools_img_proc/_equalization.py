@@ -1,15 +1,19 @@
 """
 This module contains code for equalizing image values
 """
-from napari.utils.notifications import show_info
 from napari.layers import Image, Layer
 from napari.qt.threading import thread_worker
-from napari_cool_tools_io import torch,viewer,memory_stats
+from napari.utils.notifications import show_info
+from napari_cool_tools_io import memory_stats, torch, viewer
+
 from napari_cool_tools_img_proc._equalization_funcs import (
     DType,
-    clahe_func, clahe_pt_func,
-    background_removal_func, init_bscan_preproc
+    background_removal_func,
+    clahe_func,
+    clahe_pt_func,
+    init_bscan_preproc,
 )
+
 
 def init_bscan_preproc_plugin(img:Image,num_std:int=16,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DType=DType.NP_FLOAT):
     '''
@@ -29,7 +33,7 @@ def init_bscan_preproc_thread(img:Image,num_std:int=16,min_intensity:float=0.0,m
     Returns:
     Raises:
     '''
-    show_info(f'Init Bscan Preproc thread started')
+    show_info('Init Bscan Preproc thread started')
 
 
     name = f'{img.name}_InitPreproc'
@@ -43,7 +47,7 @@ def init_bscan_preproc_thread(img:Image,num_std:int=16,min_intensity:float=0.0,m
     layer = Layer.create(proc_data,add_kwargs,layer_type)
 
 
-    show_info(f'Thread Name thread completed')
+    show_info('Thread Name thread completed')
     return layer
 
 def background_removal_plugin(img:Image):
@@ -63,7 +67,7 @@ def background_removal_thread(img:Image)->Image:
     Returns:
     Raises:
     '''
-    show_info(f'Background removal thread started')
+    show_info('Background removal thread started')
 
 
     name = f'{img.name}_bg_corrected'
@@ -77,7 +81,7 @@ def background_removal_thread(img:Image)->Image:
     layer = Layer.create(proc_data,add_kwargs,layer_type)
 
 
-    show_info(f'Background removal thread completed')
+    show_info('Background removal thread completed')
     return layer
 
 
@@ -90,7 +94,7 @@ def clahe(img:Image, kernel_size=None,clip_limit:float=0.01,nbins=256,norm_min=0
 @thread_worker(connect={"returned": viewer.add_layer},progress=True)
 def clahe_thread(img:Image, kernel_size=None,clip_limit:float=0.01,nbins=256,norm_min=0,norm_max=1,pt_K:bool=True) -> Layer:
     ''''''
-    show_info(f'Autocontrast (CLAHE) thread has started')
+    show_info('Autocontrast (CLAHE) thread has started')
 
     name = img.name
 
@@ -109,7 +113,7 @@ def clahe_thread(img:Image, kernel_size=None,clip_limit:float=0.01,nbins=256,nor
 
     layer = Layer.create(output,add_kwargs,layer_type)
 
-    show_info(f'Autocontrast (CLAHE) thread has completed')
+    show_info('Autocontrast (CLAHE) thread has completed')
     return layer
     
 def match_histogram(target_histogram:Image,debug:bool=False):
