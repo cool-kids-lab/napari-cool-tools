@@ -1,8 +1,3 @@
-import os
-import os.path as ospath
-import xml.etree.ElementTree as ET
-from pathlib import Path
-
 import numpy as np
 from napari.utils.notifications import show_info
 
@@ -23,7 +18,7 @@ def torch_get_reader(path):
     # If format is recogized return reader function
     if isinstance(path, str) and path.endswith(".pt"):
         # calculate file size in bytes
-        file_size = os.path.getsize(path)
+        # file_size = os.path.getsize(path)
 
         return torch_file_reader
     return None
@@ -45,13 +40,13 @@ def torch_file_reader(path):
             default to layer_type=="image" if not provided
     """
 
-    data,attributes,layer_type = torch.load(path)
+    data, attributes, layer_type = torch.load(path, weights_only=False)
     data = data.numpy()
-    
+
     # transpose array so that x and y are switched then flip array
     # to better orient b-scans for manual segmentation
 
-    #display = data.transpose(0, 2, 1)
+    # display = data.transpose(0, 2, 1)
     # display = display[:,::-1,:]
 
     display = np.flip(data.transpose(0, 2, 1), 1)
@@ -66,6 +61,6 @@ def torch_file_reader(path):
         pass
 
     show_info(
-        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n" #data: {data},
+        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n"  # data: {data},
     )
     return [(display, attributes, layer_type)]

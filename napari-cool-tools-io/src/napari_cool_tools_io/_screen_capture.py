@@ -29,9 +29,7 @@ def data_capture_from_view(selection=viewer.layers.selection) -> Layer:
         ):
             depth_idx = viewer.dims.order[0]
             current_depth = viewer.dims.current_step[depth_idx]
-            viewed_data = layer.data.transpose(viewer.dims.order)[
-                current_depth
-            ]
+            viewed_data = layer.data.transpose(viewer.dims.order)[current_depth]
 
             print(
                 f"\nGetting Numpy slice...\nDepth: {current_depth}\nAlong data axis: {depth_idx}\nLayer: {layer}\nDimensions: {viewed_data.shape}\n"
@@ -55,9 +53,7 @@ def data_capture_from_view(selection=viewer.layers.selection) -> Layer:
                 )
 
     else:
-        show_info(
-            "\nA single layer needs to be selected for this function to work\n"
-        )
+        show_info("\nA single layer needs to be selected for this function to work\n")
 
 
 @magic_factory(call_button="Image Capture from View")
@@ -97,9 +93,7 @@ def image_capture_from_view(selection=viewer.layers.selection) -> Layer:
         ):
             depth_idx = viewer.dims.order[0]
             current_depth = viewer.dims.current_step[depth_idx]
-            viewed_data = layer.data.transpose(viewer.dims.order)[
-                current_depth
-            ]
+            viewed_data = layer.data.transpose(viewer.dims.order)[current_depth]
 
             print(
                 f"\nGetting slice...\nDepth: {current_depth}\nAlong data axis: {depth_idx}\nLayer: {layer}\nDimensions: {viewed_data.shape}\n"
@@ -137,6 +131,4 @@ def image_capture_from_view(selection=viewer.layers.selection) -> Layer:
                 )
 
     else:
-        show_info(
-            "\nA single layer needs to be selected for this function to work\n"
-        )
+        show_info("\nA single layer needs to be selected for this function to work\n")

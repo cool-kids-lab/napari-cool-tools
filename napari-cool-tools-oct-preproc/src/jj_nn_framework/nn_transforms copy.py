@@ -499,10 +499,11 @@ class ConcatInverse(nn.Module):
 
 
 class GenerateSlidingAverage(nn.Module):
-    def __init__(self,scans_per_avg:int=5):
+    def __init__(self,scans_per_avg:int=5,ensemble=False):
         super().__init__()
 
         self.scans_per_avg = scans_per_avg
+        self.ensemble = ensemble
 
     def forward(self,t):
         x=t[0]
@@ -511,7 +512,7 @@ class GenerateSlidingAverage(nn.Module):
         #print(f"scans_per_avg (transform): {self.scans_per_avg}\n")
 
         #x = average_per_bscan_pt(x,scans_per_avg=self.scans_per_avg,trim=False,ensemble=True)
-        x = average_per_bscan_pt(x,scans_per_avg=self.scans_per_avg,trim=False,ensemble=True)
+        x = average_per_bscan_pt(x,scans_per_avg=self.scans_per_avg,trim=False,ensemble=self.ensemble)
 
         l[0] = x
 

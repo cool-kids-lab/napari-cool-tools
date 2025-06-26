@@ -8,6 +8,7 @@ from napari.utils.notifications import show_info
 
 data_element_size = 2  # number of bytes per data element uint16 == 2 bytes
 
+
 def unp_get_reader(path):
     """Reader for COOL lab .unp file format.
 
@@ -196,9 +197,7 @@ def unp_proc_meta(path, ext: str):
 
         # Case no valid values obtained from metafile return None
         if (
-            depth is not None
-            and height is not None
-            and width is not None
+            depth is not None and height is not None and width is not None
             # and bmscan is not None
             # and width_param is not None
         ):
@@ -239,51 +238,54 @@ def unp_file_reader(path):
     w = globals()["unp_width_param"]
     d = globals()["unp_depth"]
     bmscan = globals()["unp_bmscan"]
-    dtype = globals()["dtype"]
     layer_type = globals()["layer_type"]
 
     # isolate file name from path and .unp extension
     # file_name = ospath.basename(path)
     head, tail = ospath.split(path)
     file_name = tail.replace(".", "_")
-    #file_name = str(file_name)
-
-    # # define chuncks as little endian f32 4 byte floats with HEIGHT values
-    # # per row and WIDTH values per column
-    # if dtype is None:
-    #     dot_unp = np.dtype(("<f4", (h, w)))
-    # else:
-    #     dot_unp = np.dtype((dtype, (h, w)))
+    # file_name = str(file_name)
 
     # #load the library
-    import PyQt5.QtCore
     import ctypes
 
+    import PyQt5.QtCore
+
     dirname = os.path.dirname(PyQt5.QtCore.__file__)
-    plugin_path = os.path.join(dirname, 'plugins', 'platforms')
-    os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = plugin_path
+    plugin_path = os.path.join(dirname, "plugins", "platforms")
+    os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = plugin_path
 
     dll_filename = os.path.dirname(__file__) + "/UNPImporter.dll"
     print(dll_filename)
     dll_lib = ctypes.WinDLL(dll_filename)
 
-    char_array = ctypes.create_string_buffer(path.encode('utf-8'))
+    char_array = ctypes.create_string_buffer(path.encode("utf-8"))
 
-    dll_lib.newMainWindow.argtypes = [ctypes.c_char_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_void_p]
+    dll_lib.newMainWindow.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_void_p,
+    ]
     dll_lib.newMainWindow.restypes = [ctypes.c_bool]
-    
-    display = np.zeros((d,h,int(w/2)),dtype=np.float32)
+
+    display = np.zeros((d, h, int(w / 2)), dtype=np.float32)
     buffer = display.ctypes.data_as(ctypes.c_void_p)
 
-    dll_lib.newMainWindow(char_array,ctypes.c_int(w),
-                             ctypes.c_int(h),
-                             ctypes.c_int(d),
-                             ctypes.c_int(bmscan),buffer)
+    dll_lib.newMainWindow(
+        char_array,
+        ctypes.c_int(w),
+        ctypes.c_int(h),
+        ctypes.c_int(d),
+        ctypes.c_int(bmscan),
+        buffer,
+    )
 
     del dll_lib
 
-
-    display = np.flip(display.transpose(0, 2, 1),1)
+    display = np.flip(display.transpose(0, 2, 1), 1)
 
     # optional kwargs for viewer.add_* method
     add_kwargs = {"name": file_name}

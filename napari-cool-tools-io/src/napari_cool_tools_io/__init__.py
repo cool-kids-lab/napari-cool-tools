@@ -9,15 +9,17 @@ import napari
 import torch
 from napari.utils.notifications import show_info
 
+# from qtreload import QtReloadWidget
+
 viewer = napari.current_viewer()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def memory_stats():
-    show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated()/1024**2}")
-    show_info(f"Gpu memory reserved: {torch.cuda.memory_reserved()/1024**2}")
-    
-    gpu_mem_clear = (torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0)
+    show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")
+    show_info(f"Gpu memory reserved: {torch.cuda.memory_reserved() / 1024**2}")
+
+    gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
 
     print(f"GPU memory is clear: {gpu_mem_clear}\n")
     if not gpu_mem_clear:
@@ -163,7 +165,7 @@ def shortcut3(viewer):
                 curr_layer.brush_size = brush_size - 1
 
                 # update viewer with mesage
-                msg = f"decrease brush size to {brush_size-1}"
+                msg = f"decrease brush size to {brush_size - 1}"
                 viewer.status = msg
 
             # case brush size is <= 1
@@ -214,7 +216,7 @@ def shortcut4(viewer):
                 curr_layer.brush_size = brush_size + 1
 
                 # update viewer with mesage
-                msg = f"increase brush size to {brush_size+1}"
+                msg = f"increase brush size to {brush_size + 1}"
                 viewer.status = msg
 
             # case brush size is >= 40
@@ -230,3 +232,16 @@ def shortcut4(viewer):
     # case multiple layers are selected
     else:
         pass
+
+
+## specify list of modules that should be monitored
+# list_of_modules = ["napari","napari_cool_tools_img_proc" ,"napari_cool_tools_io","napari_cool_tools_oct_preproc","napari_cool_tools_registration","napari_cool_tools_segmentation","napari_cool_tools_vol_proc"]
+#
+# widget = QtReloadWidget(list_of_modules)
+#
+## add the widget to your application (or keep reference to it so it's not garbage collected)
+# qt_viewer = napari.qt.QtViewer(viewer)
+# qt_viewer.addWidget(widget)
+#
+# show_info(f"\n\nHOT RELOAD ACTIVATED!!\n\n")
+# print(f"\n\nHOT RELOAD ACTIVATED!!\n\n")

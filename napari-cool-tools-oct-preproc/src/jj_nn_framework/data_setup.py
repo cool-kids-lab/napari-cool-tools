@@ -308,7 +308,7 @@ def load_img_lbl_tensors(data_dir,device='cpu'):
         print(f"Image or Labels data are missing !!")
     else:
         
-        data = torch.load(data_path)
+        data = torch.load(data_path,weights_only=False)
         if "file_paths" in data.keys():
             paths = data["file_paths"]
         else:
