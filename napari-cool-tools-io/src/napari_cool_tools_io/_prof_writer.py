@@ -57,7 +57,9 @@ def prof_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
 
             show_info(f"Saving {path}")
         else:
-            raise ValueError(f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions.")
+            raise ValueError(
+                f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
+            )
     else:
         path = Path(path)
         p_dir = Path(path.parent) / path.stem
@@ -69,9 +71,7 @@ def prof_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
             name = attributes["name"]
             out_path = p_dir / f"{name}{ext}"
 
-            show_info(
-                f"path: {out_path}, shape: {data.shape}, attributes: {name}\n"
-            )
+            show_info(f"path: {out_path}, shape: {data.shape}, attributes: {name}\n")
 
             # case .prof files should be 3 dimensional
             if data.ndim == 3:
@@ -90,7 +90,9 @@ def prof_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
 
                 show_info(f"Saving {out_path}")
             else:
-                raise ValueError(f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions.")
+                raise ValueError(
+                    f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
+                )
 
                 # return [path]
             # case data is not proper dimension

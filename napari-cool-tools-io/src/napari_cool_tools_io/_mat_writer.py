@@ -45,9 +45,7 @@ def save_numpy(path, mat_dict, do_compression):
     return
 
 
-def compressed_mat_file_writer(
-    path: str, layer_data: list[FullLayerData]
-) -> List[str]:
+def compressed_mat_file_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
     """Saves a napari scene in compressed .MAT file format
     Args:
         path(str or list of str): Path to file, or list of paths.
@@ -131,9 +129,7 @@ def data_mat_file_writer(path: str, layers: list[Layer]) -> List[str]:
     return [path]
 
 
-def compressed_data_mat_file_writer(
-    path: str, layers: list[Layer]
-) -> List[str]:
+def compressed_data_mat_file_writer(path: str, layers: list[Layer]) -> List[str]:
     """Saves napari layer data only in compressed .MAT file format
     Args:
         path(str or list of str): Path to file, or list of paths.

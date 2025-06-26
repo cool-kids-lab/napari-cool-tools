@@ -8,7 +8,8 @@ from napari.utils.notifications import show_info
 
 data_element_size = 4  # number of bytes per data element f32 == 4 bytes
 
-def ini_proc_word(line,target_str):
+
+def ini_proc_word(line, target_str):
     """"""
     words = line.split("=")
     index = words.index(target_str)
@@ -18,6 +19,7 @@ def ini_proc_word(line,target_str):
     else:
         print("ERROR in ini_proc_word function")
         return None
+
 
 def prof_get_reader(path):
     """Reader for COOL lab .prof file format.
@@ -118,31 +120,33 @@ def prof_proc_meta(path, ext: str):
             None,
         )
 
-        data = {"section":"", "content":""}
+        data = {"section": "", "content": ""}
         settings = []
 
         with open(meta_path2) as file:
-            for i,line in enumerate(file):
+            for i, line in enumerate(file):
                 if "[" not in line:
                     data["content"] = f"{data['content']}{line}"
 
                     if data["section"] == "General" and "WIDTH=" in line:
-                        width_param = ini_proc_word(line,"WIDTH")
+                        width_param = ini_proc_word(line, "WIDTH")
                     if data["section"] == "General" and "HEIGHT=" in line:
-                        height = ini_proc_word(line,"HEIGHT")
+                        height = ini_proc_word(line, "HEIGHT")
                     if data["section"] == "General" and "FRAMES=" in line:
-                        depth = ini_proc_word(line,"FRAMES")
+                        depth = ini_proc_word(line, "FRAMES")
                     if data["section"] == "OCT" and "BScanWidth=" in line:
-                        width = ini_proc_word(line,"BScanWidth")
+                        width = ini_proc_word(line, "BScanWidth")
                     if data["section"] == "OCTA" and "BMScan=" in line:
-                        bmscan = ini_proc_word(line,"BMScan")
+                        bmscan = ini_proc_word(line, "BMScan")
                 else:
                     if i != 0:
                         settings.append(data)
-                    data = {"section":"", "content":""}
-                    data["section"] = line.replace("[","").replace("]","").replace("\n","")
+                    data = {"section": "", "content": ""}
+                    data["section"] = (
+                        line.replace("[", "").replace("]", "").replace("\n", "")
+                    )
                     settings
-            settings.append(data)        
+            settings.append(data)
 
         dtype = None
         layer_type = None
@@ -201,9 +205,7 @@ def prof_proc_meta(path, ext: str):
 
         # Case no valid values obtained from metafile return None
         if (
-            depth is not None
-            and height is not None
-            and width is not None
+            depth is not None and height is not None and width is not None
             # and bmscan is not None
             # and width_param is not None
         ):
@@ -277,7 +279,7 @@ def prof_file_reader(path):
         for i in range(len(fix_octa)):
             if sign == -1:
                 fix_octa[i] = np.flip(display[i], axis=1)
-                #fix_octa[i] = display[i]
+                # fix_octa[i] = display[i]
             else:
                 fix_octa[i] = display[i]
             if (i + 1) % bmscan == 0:
@@ -295,6 +297,6 @@ def prof_file_reader(path):
         pass
 
     show_info(
-        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n" #bmscan: {bmscan},
+        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n"  # bmscan: {bmscan},
     )
     return [(display, add_kwargs, layer_type)]
