@@ -2,15 +2,17 @@
 This module contains code for OCT data preprocessing.
 """
 
-from typing import List, Generator
+from typing import Generator, List
+
+import skimage
 import skimage.transform
-from tqdm import tqdm
-from napari.utils.notifications import show_info
-from napari_cool_tools_io import viewer
 from napari.layers import Image, Layer
-from napari.types import ImageData
 from napari.qt.threading import thread_worker
-from napari_cool_tools_io import torch, memory_stats
+from napari.types import ImageData
+from napari.utils.notifications import show_info
+from napari_cool_tools_io import memory_stats, torch, viewer
+from tqdm import tqdm
+
 from napari_cool_tools_oct_preproc import (
     Augmentation,
     EnfaceAccumulation,
@@ -18,12 +20,11 @@ from napari_cool_tools_oct_preproc import (
     Preproc,
 )
 from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import (
-    preproc_bscan,
     data_augmentation,
-    generate_octa,
     generate_enface,
+    generate_octa,
+    preproc_bscan,
 )
-import skimage
 
 
 def resize_image_plugin(
@@ -281,17 +282,17 @@ def generate_enface_image_func(
 
     """
 
-    from napari_cool_tools_registration._registration_tools import (
-        a_scan_correction_func,
-        a_scan_reg_subpix_gen,
-        a_scan_reg_calc_settings_func,
-    )
-    from napari_cool_tools_img_proc._normalization import (
-        normalize_data_in_range_pt_func,
-    )
     from napari_cool_tools_img_proc._denoise import diff_of_gaus_func
     from napari_cool_tools_img_proc._equalization import clahe_pt_func
     from napari_cool_tools_img_proc._luminance import adjust_log_pt_func
+    from napari_cool_tools_img_proc._normalization import (
+        normalize_data_in_range_pt_func,
+    )
+    from napari_cool_tools_registration._registration_tools import (
+        a_scan_correction_func,
+        a_scan_reg_calc_settings_func,
+        a_scan_reg_subpix_gen,
+    )
 
     layers = []
 
@@ -432,21 +433,21 @@ def process_bscan_preset_func(
     Returns:
         processed b-scan volume(Image)
     """
-    from napari_cool_tools_img_proc._normalization import (
-        normalize_in_range_func,
-        normalize_in_range_pt_func,
-    )
     from napari_cool_tools_img_proc._denoise import diff_of_gaus_func
     from napari_cool_tools_img_proc._equalization import clahe_pt_func
-    from napari_cool_tools_img_proc._luminance import adjust_log_pt_func
     from napari_cool_tools_img_proc._filters import (
         filter_bilateral_pt_func,
         filter_median_pt_func,
     )
-    from napari_cool_tools_vol_proc._averaging_tools import average_per_bscan
+    from napari_cool_tools_img_proc._luminance import adjust_log_pt_func
+    from napari_cool_tools_img_proc._normalization import (
+        normalize_in_range_func,
+        normalize_in_range_pt_func,
+    )
     from napari_cool_tools_registration._registration_tools import (
         a_scan_correction_func,
     )
+    from napari_cool_tools_vol_proc._averaging_tools import average_per_bscan
 
     # out = normalize_in_range_pt_func(vol,0,1) # add flag and refactor function
     out = normalize_in_range_func(vol, 0, 1)
@@ -776,10 +777,10 @@ def preproc_bscan_old(
     g_blur_bt="reflect",
 ) -> ImageData:
     """"""
+    from jj_nn_framework.nn_transforms import BscanPreproc
     from napari_cool_tools_registration._registration_tools import (
         a_scan_correction_func2,
     )
-    from jj_nn_framework.nn_transforms import BscanPreproc
 
     bscan_preproc = BscanPreproc(
         log_gain=log_gain,
