@@ -14,6 +14,7 @@ def main() -> Tuple[str, str]:
     def napari_install(
         version: Literal["development", "production"] = "production",
         backend: Literal["cpu", "cuda11", "cuda12"] = "cpu",
+        visualization: bool = False, 
     ):
         """
         Stacks .SLO files along new z axis.
@@ -30,6 +31,8 @@ def main() -> Tuple[str, str]:
         if version == "development":
             dev_status = version
             features.append(dev_status)
+            if visualization:
+                features.append('visualization')
 
         with open("pixi.toml", "r") as f:
             pixi_config = tomlkit.load(f)
