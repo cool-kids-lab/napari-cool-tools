@@ -20,6 +20,9 @@ contributions:
     - id: napari-cool-tools-registration.curve_correction
       title: BScan Curve Correction
       python_name: napari_cool_tools_registration._curve_correction:Curve_Correction_Widget
+    - id: napari-cool-tools-registration.curve_correction_chunk
+      title: BScan Curve Correction Chunk
+      python_name: napari_cool_tools_registration._curve_correction_chunk:cartify
     - id: napari-cool-tools-registration.m_scan_registration
       title: MScan registration
       python_name: napari_cool_tools_registration._registration_tools:m_scan_registration
@@ -32,6 +35,9 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-registration.curve_correction
       display_name: BScan Curve Correction
+    - command: napari-cool-tools-registration.curve_correction_chunk
+      display_name: BScan Curve Correction Chunk
+      autogenerate: false
     - command: napari-cool-tools-registration.a_scan_correction
       display_name: Correct A-scan distortion
       autogenerate: true

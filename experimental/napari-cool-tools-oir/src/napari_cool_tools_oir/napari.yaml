@@ -1,0 +1,11 @@
+name: napari-cool-tools-oir
+display_name: COOL lab Matfile IO tools
+contributions:
+  commands:
+    - id: napari-cool-tools-oir.load_segmentation_data
+      python_name: napari_cool_tools_oir._loader:load_segmentation_data
+      title: Open Matfile OIR Data
+  widgets:
+    - command: napari-cool-tools-oir.load_segmentation_data
+      display_name: Open Matfile OIR Data
+      autogenerate: false
