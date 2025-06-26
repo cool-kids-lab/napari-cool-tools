@@ -40,6 +40,8 @@ notebook = "==7.4.3"
 onnx = "==1.16.2"
 qtreload = "==0.2.3"
 polars = "==1.31.*"
+#pypcd4 = "==1.2.1"
+#pyvista = "==0.45.*"
 
 [feature.visualization]
 [feature.visualization.pypi-dependencies]
@@ -96,4 +98,5 @@ cuda12-dev = { features = ["development", "cuda12", "visualization"] }
 
 ## Make CPU the default environment
 #default = { features = ["cpu"] }
+
 

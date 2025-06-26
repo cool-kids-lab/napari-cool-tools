@@ -8,7 +8,12 @@ import numpy as np
 import pyvista as pv
 from cupyx.scipy.ndimage import map_coordinates
 from magicgui import magicgui
-from napari_cool_tools_img_proc._equalization_funcs import DTYPE, init_bscan_preproc
+from napari_cool_tools_img_proc import DType
+from napari_cool_tools_img_proc._equalization_funcs import init_bscan_preproc
+from napari_cool_tools_registration._registration_tools_funcs import (
+    a_scan_correction_func2,
+)
+from pypcd4 import PointCloud
 from skimage.measure import block_reduce, marching_cubes
 from tqdm import tqdm
 
@@ -191,9 +196,9 @@ def cartify(
     # Crop the volume
     cart_image = cart_image[x_min : x_max + 1, y_min : y_max + 1, z_min : z_max + 1]
     # print(cart_image.max())
-    if save:
-        log_time("Saving file")
-        np.save("rendered.npy", cart_image)
+    # if save:
+    #    log_time("Saving file")
+    #    np.save("rendered.npy", cart_image)
     return cart_image
 
 
@@ -261,6 +266,36 @@ def volumerender(data, threshold=9, opac=0.3):
     plotter.show()
 
 
+def pointcloud_renderer(data, threshold=9):
+    log_time("Normalizing data for point cloud render")
+    data_max = 25
+    data = np.clip(data, a_min=None, a_max=data_max)
+
+    pcd_numpy_data = numpy_to_pcd_format(data)
+
+    point_cloud = pv.PolyData(pcd_numpy_data[:, :3])
+    point_cloud["intensity"] = pcd_numpy_data[:, -1]
+
+    plotter = pv.Plotter()
+    plotter.add_mesh(
+        point_cloud, render_points_as_spheres=True, color="red"
+    )  # ,eye_dome_lighting=True)
+    plotter.enable_eye_dome_lighting()
+    plotter.show()
+
+
+def numpy_to_pcd_format(data: np.ndarray, threshold=9):
+    """"""
+    x, y, z = np.where(data > threshold)
+    print(f"There are {len(x)} points in the pointcloud.\n")
+    # x,y,z = np.where(data != 0)
+    # x,y,z = np.arange(data.shape[0],np.arange(data.shape[1]),np.arange(data.shape[2]))
+    intensity_data = data[x, y, z]
+    assert len(x) == len(y) == len(z) == len(intensity_data)
+
+    return np.stack([x, y, z, intensity_data], axis=1)
+
+
 # Just put the filename and path like below (keep the 'r' before the file name)
 # file = r""
 
@@ -297,23 +332,30 @@ def generate_fast_curve_correction(
     output_filename: str = "output.pt",
     sweep: int = 102,
     downsampling: int = 3,
-    resolution: int = 1,
+    resolution: float = 1 / 6,
     threshold: int = 15,  # 60
     isovalue: int = 3,
-    save: bool = False,
+    save_pcd: bool = False,
+    save_npy: bool = False,
     use_gpu: bool = True,
+    sin_correct: bool = False,
 ):
     """ """
     viewer = napari.Viewer(show=False)
     viewer.open(image_path, plugin="napari-cool-tools-io")
     image_data = viewer.layers[-1].data
+    image_name = viewer.layers[-1].name
     # normalized_data = normalize_data_in_range_func(image_data,0,255).astype(np.uint8)
+
+    if sin_correct:
+        image_data = a_scan_correction_func2(image_data)
+
     preproc_data = init_bscan_preproc(
         image_data,
         num_std=16,
         min_intensity=0.0,
         max_intensity=255.0,
-        dtype=DTYPE.NP_UINT8,
+        dtype=DType.NP_UINT8,
     )
 
     print(type(image_data), image_data.shape)
@@ -327,17 +369,30 @@ def generate_fast_curve_correction(
         ds=downsampling,
         res=resolution,
         threshold=threshold,
-        save=save,
+        # save=save,
+        save=False,
     )
 
     print(f"print cartesian stats: {type(cart)}, {cart.dtype},{cart.shape}\n")
     # surfacerender(cart, isovalue = isovalue)
     volumerender(cart, 0.2)
+    pointcloud_renderer(cart, threshold=9)
     # viewer.add_image(cart,name="uncle_ben-s_curve_correction")
     viewer.add_image(cart.transpose(0, 2, 1), name="uncle_ben-s_curve_correction")
     # viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
     viewer.show()
     napari.run()
+
+    if save_pcd:
+        pcd_numpy_data = numpy_to_pcd_format(data=cart, threshold=threshold)
+        pointcloud = PointCloud.from_xyzi_points(pcd_numpy_data)
+        output_file_path = output_dir / f"{image_name}.pcd"
+        pointcloud.save(output_file_path)
+
+    if save_npy:
+        log_time("Saving file")
+        output_file_path = output_dir / f"{image_name}.npy"
+        np.save(output_file_path, cart)
 
 
 generate_fast_curve_correction.show(run=True)
