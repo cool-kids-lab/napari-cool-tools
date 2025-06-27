@@ -1,5 +1,5 @@
 # napari-cool-tools
- Napari Library Developed by COOL LAB group at Casey Eye Institute, Oregon Health and Science University
+ Napari Library Developed by Cool-Kids-Lab subgroup at Casey Eye Institute, Oregon Health and Science University
 
 # Minimum System Requirements
  - Windows 10 or later
