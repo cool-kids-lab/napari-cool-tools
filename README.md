@@ -28,3 +28,14 @@ While manual installation may be possible on Linux or macOS, certain features ma
 
 ---
 
+## ❌ Uninstallation
+
+1. Double-click the included `uninstall.bat` file in the installation directory.  
+   This will:
+   - Remove the Napari Cool Tools shortcut from your Desktop.
+   - Clean up any environment files related to the installation.
+
+2. After running `uninstall.bat`, **manually delete the entire installation folder**, including the `uninstall.bat` file itself.
+
+---
+
