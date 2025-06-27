@@ -1,21 +1,30 @@
 # napari-cool-tools
- Napari Library Developed by Cool-Kids-Lab subgroup at Casey Eye Institute, Oregon Health and Science University
 
-# Minimum System Requirements
- - Windows 10 or later
- - CUDA 12.4 (NVIDIA GPU with CUDA Capabilities
- - Conda 24.0 or later
- - Napari 0.5.6 (will be installed with the installer.bat)
+A Napari plugin library developed by the **Cool-Kids-Lab** subgroup at the **Casey Eye Institute**, Oregon Health & Science University (OHSU), Portland, OR.
 
- Note: This library hasn't been tested in OS other than Windows 10 or later. Although it is possible to install it manually on Linux or MacOS, some feature may not be running properly.
+---
 
-# Installation Instruction
- ## 1. Make  sure CUDA Libray is installed (download it here [CUDA](https://developer.nvidia.com/cuda-12-4-0-download-archive))
-   Check your cuda installation by run `nvcc` in the command prompt.
- ## 2. Make  sure Conda or Miniconda is installed (download it here [CONDA](https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe))
-   Check your conda installation by run `conda --version` in the command prompt.
- ## 3. Double Click the `installer.bat` file
-   After the installation is finished. A shortcut is created on the Desktop folder. Two options are available to run the napari.
-   1. Double click the `Napari Cool Tools` shortcut in Desktop folder.
-      or
-   2. Open powershell or command promp, and activate the environment by running `conda activate cool-tools-env`, and then run `napari`
+## 🔧 Minimum System Requirements
+
+- **Operating System**: Windows 10 or later  
+- **GPU Support** (optional): NVIDIA GPU with CUDA capabilities  
+  - Requires **CUDA 12.4** for GPU acceleration  
+- **Napari**: Version 0.5.6 (automatically installed via `install.bat`)
+
+> ⚠️ **Note**: This library has only been tested on Windows 10+.  
+While manual installation may be possible on Linux or macOS, certain features may not function as expected.
+
+---
+
+## 🚀 Installation
+
+1. Download or clone the repository.
+2. Run the provided `install.bat` file.
+3. Launch the application using the shortcut created on your Desktop.
+
+> ✅ **Important**:  
+> This software is designed to be installed **without administrator privileges**.  
+> It installs locally to your Windows user account and **does not affect system-wide settings**.
+
+---
+
