@@ -1,57 +1,69 @@
-""" """
-
 import subprocess
-from typing import List, Literal, Tuple
+import sys
+from typing import List, Literal
 
 import tomlkit
 from magicgui import magicgui
+import os
 
+def main() -> bool:
+    """Launches GUI to configure and install Napari with Pixi.
 
-def main() -> Tuple[str, str]:
-    @magicgui(
-        call_button="Install Napari",
-    )
+    Returns:
+        True if installation succeeded, False otherwise.
+    """
+
+    @magicgui(call_button="Install")
     def napari_install(
         version: Literal["development", "production"] = "production",
         backend: Literal["cpu", "cuda11", "cuda12"] = "cpu",
-        visualization: bool = False, 
+        visualization: bool = False,
     ):
+        """Installs Napari with selected configuration.
+
+        Args:
+            version: Install the 'development' or 'production' build.
+            backend: Backend type, e.g., 'cpu', 'cuda11', or 'cuda12'.
+            visualization: Include visualization extras if True.
         """
-        Stacks .SLO files along new z axis.
+        try:
+            features: List[str] = [backend]
 
-        Parameters
-        ----------
-        SLO_dir: Directory Containing .SLO files to be converted
-        output_dir: Directory to Store processed .SLO files if left empty will save to SLO_dir
-        output_file_suffix: suffix to put between orginal file name and .SLO extension
+            if version == "development":
+                features.append("development")
+                if visualization:
+                    features.append("visualization")
 
-        """
-        features: List[str] = [backend]
-        dev_status = ""
-        if version == "development":
-            dev_status = version
-            features.append(dev_status)
-            if visualization:
-                features.append('visualization')
+            # Load pixi.toml
+            with open("pixi.toml", "r", encoding="utf-8") as file:
+                print("File Opened")
+                pixi_config = tomlkit.load(file)
 
-        with open("pixi.toml", "r") as f:
-            pixi_config = tomlkit.load(f)
+            # Set features in the default environment
+            pixi_config["environments"]["default"] = {"features": features}
+            print(f"Default feature config set to: {features}\n")
 
-        pixi_config["environments"]["default"] = {"features": features}
-        print(f"Default feature config set to: {features}\n")
+            # Write updated config back
+            with open("pixi.toml", "w", encoding="utf-8") as file:
+                tomlkit.dump(pixi_config, file)
 
-        with open("pixi.toml", "w") as f:
-            tomlkit.dump(pixi_config, f)
+            # Run pixi install
+            pixi_path = os.path.expanduser(r"~\.pixi\bin\pixi.exe")  # Typical path on Windows
+            subprocess.check_call([pixi_path, "install"])
 
-        subprocess.check_call(["pixi", "install"])
+            print("Installation completed successfully.")
+            sys.exit(0)
 
-        print(napari_install)
-        napari_install.close()
-
-        return
-
+        except Exception as error:
+            print(f"Installation failed: {error}")
+            sys.exit(1)
+    
+    napari_install.native.setWindowTitle("Mode Selection")
     napari_install.show(run=True)
+    return False  # Should never reach here unless GUI closes without action
 
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    sys.exit(0 if success else 1)
+
