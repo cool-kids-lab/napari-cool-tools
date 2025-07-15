@@ -6,5 +6,8 @@ from enum import Enum
 
 
 class DType(Enum):
-    NP_FLOAT = "f4"  # np.dtype(np.float64)
-    NP_UINT8 = "u1"  # np.dtype(np.uint8)
+    NP_UINT8 = "u1"
+    NP_FLOAT16 = "f2"
+    NP_FLOAT32 = "f4"
+    NP_FLOAT64 = "f8"
+
