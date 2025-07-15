@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 from napari.types import FullLayerData
 from napari.utils.notifications import show_info
-from napari_cool_tools_img_proc._normalization import (
+from napari_cool_tools_img_proc._normalization_funcs import (
     normalize_data_in_range_func,
 )
 
