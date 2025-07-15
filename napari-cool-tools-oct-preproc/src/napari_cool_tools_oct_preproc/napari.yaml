@@ -8,6 +8,9 @@ contributions:
     - id: napari-cool-tools-oct-preproc.generate_enface
       title: Generate Enface from OCT
       python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:generate_enface_plugin
+    - id: napari-cool-tools-oct-preproc.generate_3D_featue_labels
+      title: Generate 3D Feature Labels from Enface Data
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:generate_3D_feature_segmentation_from_enface_plugin
     - id: napari-cool-tools-oct-preproc.augmentation
       title: Augment Data
       python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:data_augmentation_plugin
@@ -29,6 +32,9 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-oct-preproc.generate_enface
       display_name: Generate Enface
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.generate_3D_featue_labels
+      display_name: Generate 3D Feature Labels from Enface Data
       autogenerate: true
     - command: napari-cool-tools-oct-preproc.augmentation
       display_name: Augment Data
