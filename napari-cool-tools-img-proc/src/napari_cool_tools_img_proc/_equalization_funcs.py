@@ -13,18 +13,14 @@ from napari_cool_tools_img_proc._normalization_funcs import (
     normalize_data_in_range_pt_func,
 )
 
-# class DTYPE(Enum):
-#    NP_FLOAT = 'f4' #np.dtype(np.float64)
-#    NP_UINT8 = 'u1' #np.dtype(np.uint8)
 
-
-# def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT):
+# def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT64):
 def init_bscan_preproc(
     img: ImageData,
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT,
+    dtype: DType = DType.NP_FLOAT64,
 ):
     """
     Args:
@@ -64,7 +60,7 @@ def auto_brightness_adjust(
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT,
+    dtype: DType = DType.NP_FLOAT64,
     in_place: bool = True,
 ):
     """
