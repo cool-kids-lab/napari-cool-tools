@@ -1,0 +1,11 @@
+name: napari-cool-tools-dev
+display_name: COOL Lab cool-tools development plugins
+contributions:
+  commands:
+    - id: napari-cool-tools-dev.hot_reload_active
+      python_name: napari_cool_tools_dev._dev:hot_reload
+      title: Show Hot Reload is Active
+  widgets:
+    - command: napari-cool-tools-dev.hot_reload_active
+      display_name: Show Hot Reload is Active
+      autogenerate: True
