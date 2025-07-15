@@ -142,9 +142,13 @@ def group_labels(
     Raises:
     """
     if len(input_label_vals):
-        non_zero_mask = data > 0
+        #non_zero_mask = data > 0
+        non_zero_mask = np.zeros_like(data)
+        for label in input_label_vals:
+            label_non_zero_mask = data == label
+            non_zero_mask = non_zero_mask | label_non_zero_mask
     else:
-        pass
+        raise ValueError("The input_label_vals provided contain no items a minimum of 1 item is required.")
 
     return non_zero_mask * output_label_val
 
@@ -265,9 +269,19 @@ def isolate_labeled_volume(
 
 
 def project_2d_mask(
-    img_data: ImageData, lbl_data: LabelsData, axis: int = 1, swap_axes: bool = True
+    img_data: ImageData, lbl_data: LabelsData, axis: int = 1, swap_axes: bool = False
 ) -> LabelsData:
     """ """
+
+    assert (
+        lbl_data.ndim == 2
+        and img_data.ndim == 3
+        and lbl_data.shape[-2] == img_data.shape[-3]
+        and lbl_data.shape[-1] == img_data.shape[-1]
+    ), (
+        f"Mask dimensions {lbl_data.shape} do not match Image dimensions {(img_data.shape[-3], img_data.shape[-1])}\n"
+    )
+
     if axis == 1:
         lbl_data = lbl_data[:, np.newaxis, :]
         if swap_axes:
@@ -276,13 +290,6 @@ def project_2d_mask(
         pass
     elif axis == 2:
         pass
-
-    assert (
-        lbl_data.shape[-3] == img_data.shape[-1]
-        and lbl_data.shape[-2] == img_data.shape[-1]
-    ), (
-        f"Mask dimensions {lbl_data.shape} do not match Image dimensions {(img_data.shape[-3], img_data.shape[-1])}\n"
-    )
 
     out_lbl = np.repeat(lbl_data, img_data.shape[1], axis=axis)
 
