@@ -18,7 +18,7 @@ test_volume = Path(
 )
 
 
-def bscan_onnx_seg_func(
+def bscan_onnx_deconj_func(
     img: ImageData,
     onnx_path: Path = Path(
         r"D:\JJ\Development\Yakub_Complex_Conjugate_Processing\U-net_resources\onnx\conjugate_clean.onnx"
@@ -328,7 +328,7 @@ viewer.open(test_volume, plugin="napari-cool-tools-io")
 data = viewer.layers[-1].data
 name = viewer.layers[-1].name
 add_kwargs = {"name": f"{name}_deconjugated"}
-cleaned, layer_type = bscan_onnx_seg_func(data, batch_size=8, use_cpu=False)[0]
+cleaned, layer_type = bscan_onnx_deconj_func(data, batch_size=8, use_cpu=False)[0]
 #layer = Layer.create(cleaned.transpose(-3, -1, -2), add_kwargs, layer_type)
 layer = Layer.create(cleaned, add_kwargs, layer_type)
 viewer.add_layer(layer)
