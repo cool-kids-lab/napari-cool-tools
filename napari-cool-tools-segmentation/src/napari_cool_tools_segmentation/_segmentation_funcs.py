@@ -6,7 +6,7 @@ import gc
 import platform
 
 # from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from napari.layers import Layer
@@ -24,6 +24,7 @@ from napari_cool_tools_segmentation import (
 def bscan_onnx_seg_func(
     img: ImageData,
     onnx_path=BscanSegmentationType.RETINASEG.value,
+    target_shape:list = [864,864], #(992,800)
     batch_size: int = 32,
     num_workers: int = 0,
     gpu_limit: int = 6,
@@ -46,7 +47,7 @@ def bscan_onnx_seg_func(
     from torchvision.transforms.functional import InterpolationMode
     from torchvision.transforms.v2.functional import resize
 
-    target_shape = (992, 800)
+    #target_shape = (992, 800)
     init_shape = (img.shape[-2], img.shape[-1])
 
     if use_cpu:
@@ -195,15 +196,18 @@ def bscan_onnx_seg_func(
             buffer_ptr=images_tensor.data_ptr(),
         )
 
-        pred_shape = (it_shape[0], len(CLASSES), it_shape[2], it_shape[3])
+        #pred_shape = (it_shape[0], len(CLASSES), it_shape[2], it_shape[3]) # TODO modify for old model or remove
+        pred_shape = (it_shape[0], 1, it_shape[2], it_shape[3])
         pred_tensor = torch.empty(
-            pred_shape, dtype=torch.float32, device=onnx_dev
+            #pred_shape, dtype=torch.float32, device=onnx_dev # TODO modify for old model or remove
+            pred_shape, dtype=torch.uint8, device=onnx_dev
         ).contiguous()  #'cuda:0').contiguous()
         binding.bind_output(
             name="output",
             device_type=onnx_dev,  #'cuda',
             device_id=0,
-            element_type=np.float32,
+            #element_type=np.float32, #TODO modify for old model or remove
+            element_type=np.uint8,
             shape=tuple(pred_tensor.shape),
             buffer_ptr=pred_tensor.data_ptr(),
         )
@@ -218,12 +222,14 @@ def bscan_onnx_seg_func(
         labels = []
 
         for i, mask in enumerate(pred_tensor):
-            label = torch.zeros_like(mask[0], dtype=torch.uint8)
-            mask_argmax = mask.argmax(0)
-            for i, m in enumerate(mask):
-                label[mask_argmax == i] = i
+            # TODO modify for old model or remove
+            # label = torch.zeros_like(mask[0], dtype=torch.uint8)
+            # mask_argmax = mask.argmax(0)
+            # for i, m in enumerate(mask):
+            #     label[mask_argmax == i] = i
 
-            labels.append(label)
+            labels.append(mask)
+            #labels.append(label)
 
         # print(f"label shape: {labels[0].shape}\n")
         labels = torch.stack(labels, dim=0)
@@ -251,10 +257,10 @@ def bscan_onnx_seg_func(
         pred_dl,
         # image_batch,
         images_tensor,
-        label,
-        mask_argmax,
+        #label, # TODO modify for old model or remove
+        #mask_argmax, # TODO modify for old model or remove
         mask,
-        m,
+        #m, # TODO modify for old model or remove
     )
     gc.collect()
     torch.cuda.empty_cache()
@@ -413,6 +419,12 @@ def enface_onnx_seg_func(
     # start onnx
     onnx_session = InferenceSession(onnx_path)
     input_name = onnx_session.get_inputs()[0].name
+
+    # TODO either retrain network with 3 channels or come up with new fix
+    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    # x_eq_cpu = x_eq_cpu[:,0,:,:]
+    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    # x_eq_cpu = x_eq_cpu[:,None,:,:]
 
     onnx_inputs = {input_name: x_eq_cpu}
     onnx_outs = onnx_session.run(None, onnx_inputs)

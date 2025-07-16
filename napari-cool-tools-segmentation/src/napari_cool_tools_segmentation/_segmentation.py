@@ -5,7 +5,7 @@ This module contains code for segmenting images
 import gc
 
 # from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from magicgui import magic_factory
 from napari.layers import Image, Layer
@@ -29,6 +29,7 @@ from napari_cool_tools_segmentation._segmentation_funcs import (
 def bscan_onnx_seg_plugin(
     img: Image,
     segmentation: BscanSegmentationType = BscanSegmentationType.RETINASEG,
+    target_shape:list = [864,864], #(992,800)
     batch_size: int = 32,
     num_workers: int = 0,
     use_cpu: bool = False,
@@ -40,6 +41,7 @@ def bscan_onnx_seg_plugin(
     bscan_onnx_seg_thread(
         img,
         segmentation=segmentation,  # onnx_path=onnx_path,
+        target_shape=target_shape,
         batch_size=batch_size,
         num_workers=num_workers,
         use_cpu=use_cpu,
@@ -55,6 +57,7 @@ def bscan_onnx_seg_plugin(
 def bscan_onnx_seg_thread(
     img: Image,
     segmentation: BscanSegmentationType = BscanSegmentationType.RETINASEG,
+    target_shape:list = [864,864], #(992,800)
     batch_size: int = 32,
     num_workers: int = 0,
     use_cpu: bool = True,
@@ -73,6 +76,7 @@ def bscan_onnx_seg_thread(
         img.data,
         onnx_path=onnx_path,
         batch_size=batch_size,
+        target_shape=target_shape,
         num_workers=num_workers,
         use_cpu=use_cpu,
         output_preproc=output_preproc,
