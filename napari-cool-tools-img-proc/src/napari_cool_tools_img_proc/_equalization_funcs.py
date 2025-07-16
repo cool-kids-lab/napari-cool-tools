@@ -15,12 +15,13 @@ from napari_cool_tools_img_proc._normalization_funcs import (
 
 
 # def init_bscan_preproc(img:ImageData,num_std:int=4,min_intensity:float=0.0,max_intensity:float=1.0,dtype:DTYPE=DTYPE.NP_FLOAT64):
+# TODO Move this to denoise funcs 
 def init_bscan_preproc(
     img: ImageData,
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT64,
+    dtype: DType = DType.NP_FLOAT32,
 ):
     """
     Args:
@@ -60,7 +61,7 @@ def auto_brightness_adjust(
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT64,
+    dtype: DType = DType.NP_FLOAT32,
     in_place: bool = True,
 ):
     """
