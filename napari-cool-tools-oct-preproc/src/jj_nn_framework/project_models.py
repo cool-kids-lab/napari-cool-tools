@@ -4,6 +4,17 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 import lightning as L
 
+rop_bscan_config = {
+    "ENCODER": "efficientnet-b0",
+    "ENCODER_WEIGHTS": "imagenet",
+    "ENCODER_DEPTH": 5,
+    "DECODER_CHANNELS": [224, 112, 56, 28, 14],
+    "IN_CHANNELS": 1,
+    "CLASSES": ["viteous","retina","choroid"],
+    "ACTIVATION": "sigmoid",
+    "WARMUP_ITER": 2,
+}
+
 class LitUnet(L.LightningModule):
     def __init__(self, train_config, loss_metric, acc_metric,debug:bool=False):
         super().__init__()
@@ -36,7 +47,8 @@ class LitUnet(L.LightningModule):
         pred_out = pred_out.unsqueeze(1) * 2 #255 #int(255 / (3-1))
         pred_out = pred_out.to(torch.uint8)
 
-        return pred_out, pred
+        #return pred_out, pred
+        return pred_out
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop
