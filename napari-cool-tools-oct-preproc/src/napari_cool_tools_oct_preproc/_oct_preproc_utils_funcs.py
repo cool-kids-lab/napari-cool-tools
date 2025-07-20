@@ -788,7 +788,7 @@ def generate_octa(
 
     if avg_dat:
         out_data = average_per_bscan_pt(
-            out_data, scans_per_avg=octa_data_avg, ensemble=True
+            out_data, scans_per_avg=octa_data_avg, ensemble=False
         )
 
     if not enface_only:
