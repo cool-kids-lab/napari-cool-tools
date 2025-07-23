@@ -41,10 +41,13 @@ def generate_enface_with_labels(
     max_proj_suffix:str = "max_inten_proj",
     mean_proj_suffix:str = "mean_inten_proj",
     en_face_labels_suffix:str = "en_face_labels",
+    en_face_ridge_suffix:str = "en_face_ridge_labels",
+    en_face_ON_suffix:str = "en_face_on_labels",
+    en_face_vessel_suffix:str = "en_face_vessel_labels",
     img_dtype:DType = DType.NP_FLOAT32,
     label_dtype:DType = DType.NP_UINT8,
     oct_type: Literal["OCT","OCTA"] = "OCT",
-    deconjugate:bool = False,
+    deconjugate:bool = True,
     desine:bool = False,
     log_cor:bool = True,
     init_bscan_proc:bool=True,
@@ -53,6 +56,10 @@ def generate_enface_with_labels(
     enface_max_proj:bool = True,
     enface_mean_proj:bool = True,
     enface__proj:bool = True,
+    save_enface_vessel:bool = False,
+    save_enface_optic_nerve:bool = True,
+    save_enface_ridge:bool = True,
+    save_pre_proc:bool = True,
     show_in_napari:bool = False,
     #enface_projection:ProjectionType=ProjectionType.ARGMAX,
     debug:bool = False,
@@ -117,9 +124,9 @@ def generate_enface_with_labels(
         if debug:
             print("Saving Preproc Data")
 
-        preproc_name = f"{name}_{preproc_suffix}.npy"
-        preproc_path = output_dir/preproc_name
-        np.save(preproc_path,preproc_data.astype(img_dtype.value))
+        # preproc_name = f"{name}_{preproc_suffix}.npy"
+        # preproc_path = output_dir/preproc_name
+        # np.save(preproc_path,preproc_data.astype(img_dtype.value))
 
         if debug:
             print("Preproc Data saved")
@@ -174,28 +181,28 @@ def generate_enface_with_labels(
         if debug:
             print("Generating en face Data")
 
-            if enface_mean_proj:
-                init_enface_data = list(
-                    generate_enface(
-                        preproc_data,
-                        projection_type=ProjectionType.MEAN,
-                        sin_correct=False,
-                        CLAHE=True,
-                        clahe_clip=2.5,
-                        log_correct=True,
-                        log_gain=1.0,
-                    )
-                )[0][0]
-
-                if debug:
-                    print("Saving mean intensity proj")
-
-                enface_mean_name = f"{name}_{mean_proj_suffix}.npy"
-                enface_mean_name_path = output_dir/enface_mean_name
-                np.save(enface_mean_name_path,init_enface_data.astype(img_dtype.value))
+        if enface_mean_proj:
+            init_enface_data = list(
+                generate_enface(
+                    preproc_data,
+                    projection_type=ProjectionType.MEAN,
+                    sin_correct=False,
+                    CLAHE=True,
+                    clahe_clip=2.5,
+                    log_correct=True,
+                    log_gain=1.0,
+                )
+            )[0][0]
 
             if debug:
-                print("Mean intensity saved")
+                print("Saving mean intensity proj")
+
+            enface_mean_name = f"{name}_{mean_proj_suffix}.npy"
+            enface_mean_name_path = output_dir/enface_mean_name
+            np.save(enface_mean_name_path,init_enface_data.astype(img_dtype.value))
+
+        if debug:
+            print("Mean intensity saved")
 
         if enface_max_proj:
             init_enface_data = list(
@@ -228,41 +235,69 @@ def generate_enface_with_labels(
         #     use_cpu=True,
         #     blur=False,
         # )
+        if save_enface_ridge:
 
-        init_ridge_labels = enface_onnx_seg_func(
-            init_enface_data,
-            onnx_path=EnfaceSegmentationType.RIDGE.value,
-            segmentation_type="ridge",
-            label_val=4,
-            use_cpu=True,
-            blur=False,
-        )
-        init_optic_nerve_labels = enface_onnx_seg_func(
-            init_enface_data,
-            onnx_path=EnfaceSegmentationType.OPTICNERVEHEAD.value,
-            segmentation_type="ridge",
-            label_val=6,
-            use_cpu=True,
-            DoG=True,
-            blur=False,
-        )
-        init_vessel_labels = enface_onnx_seg_func(
-            init_enface_data,
-            onnx_path=EnfaceSegmentationType.VESSEL.value,
-            segmentation_type="ridge",
-            label_val=10,
-            use_cpu=True,
-            DoG=True,
-            blur=True,
-        )
+            if debug:
+                print("Saving ridge labels")
+            init_ridge_labels = enface_onnx_seg_func(
+                init_enface_data,
+                onnx_path=EnfaceSegmentationType.RIDGE.value,
+                segmentation_type="ridge",
+                label_val=4,
+                use_cpu=True,
+                blur=False,
+            )
+            ridge_labels_name = f"{name}_{en_face_ridge_suffix}.npy"
+            ridge_labels_name_path = output_dir/ridge_labels_name
+            np.save(ridge_labels_name_path,init_ridge_labels.astype(label_dtype.value))
+
+        if save_enface_optic_nerve:
+
+            if debug:
+                print("Saving optic nerve labels")
+            init_optic_nerve_labels = enface_onnx_seg_func(
+                init_enface_data,
+                onnx_path=EnfaceSegmentationType.OPTICNERVEHEAD.value,
+                segmentation_type="ridge",
+                label_val=6,
+                use_cpu=True,
+                DoG=True,
+                blur=False,
+            )
+            on_labels_name = f"{name}_{en_face_ON_suffix}.npy"
+            on_labels_name_path = output_dir/on_labels_name
+            np.save(on_labels_name_path,init_optic_nerve_labels.astype(label_dtype.value))
+
+        if save_enface_vessel:
+
+            if debug:
+                print("Saving vessel labels")
+            init_vessel_labels = enface_onnx_seg_func(
+                init_enface_data,
+                onnx_path=EnfaceSegmentationType.VESSEL.value,
+                segmentation_type="ridge",
+                label_val=10,
+                use_cpu=True,
+                DoG=True,
+                blur=True,
+            )
+            vessel_labels_name = f"{name}_{en_face_vessel_suffix}.npy"
+            vessel_labels_name_path = output_dir/vessel_labels_name
+            np.save(vessel_labels_name_path,save_enface_vessel.astype(label_dtype.value))
 
         if debug:
             print("Saving en face labels")       
 
-        combo_labels = init_optic_nerve_labels+init_ridge_labels+init_vessel_labels
-        combo_labels_name = f"{name}_{en_face_labels_suffix}.npy"
-        combo_labels_name_path = output_dir/combo_labels_name
-        np.save(combo_labels_name_path,combo_labels.astype(label_dtype.value))
+        # TODO Reimplement later
+        # combo_labels = init_optic_nerve_labels+init_ridge_labels+init_vessel_labels
+        # combo_labels_name = f"{name}_{en_face_labels_suffix}.npy"
+        # combo_labels_name_path = output_dir/combo_labels_name
+        # np.save(combo_labels_name_path,combo_labels.astype(label_dtype.value))
+
+        if save_pre_proc:
+            preproc_name = f"{name}_{preproc_suffix}.npy"
+            preproc_path = output_dir/preproc_name
+            np.save(preproc_path,preproc_data.astype(img_dtype.value))
 
         if debug:
             print("En face labels saved")  
