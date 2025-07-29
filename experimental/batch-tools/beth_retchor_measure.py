@@ -1,9 +1,11 @@
 import sys
 import argparse
+
 import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 import napari
+from magicgui import magicgui
 from qtpy.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -16,10 +18,12 @@ from pathlib import Path
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
  
-def ridge_analysis(ridge, retchor):
+def ridge_analysis(ridge, retchor, scan_angle = 106):
     """
     Calculate mean and peak thickness from ridge and retchor arrays.
     Assumes retchor shape: (Z, Y, X) and ridge shape matches (Z, X).
+    SCANWIDTH ASSUMES USING OLD CAMERA (circa 2023-2024); ADJUST WITH DIFFERENT DEVICE
+    ALSO ASSUMES CENTER OF IMAGE IS CLOSE TO OPTICAL AXIS; NOT VAILD FOR NONTEMPORAL OR CENTRAL IMAGES
     """
     if retchor.ndim != 3:
         raise ValueError(f"Expected 3D retchor array, got shape {retchor.shape}")
@@ -32,8 +36,78 @@ def ridge_analysis(ridge, retchor):
  
     if ridge.shape != rdm.shape:
         raise ValueError(f"Shape mismatch: ridge {ridge.shape} vs thickness map {rdm.shape}")
- 
-    thickness_vals = rdm[ridge == 4]
+
+    x,y = tuple([*rdm.shape[-2:]])
+    center_x = x//2
+    center_y = y//2
+    scan_angle_from_center = scan_angle//2 # TODO update this in future to account for differences
+    min_scan_angle = 90 - scan_angle_from_center
+    max_scan_angle = 180 - scan_angle_from_center
+
+
+    print(f"center or image: {center_x,center_y}")
+    print(f"\n\nx,y shapes: {x,y}\n\n")
+    thetax,thetay = np.mgrid[0-center_x:x-center_x,0-center_y:y-center_y]
+    #print(f"\n\ncenter_x,center_y: {center_x,center_y}\n\n")
+    print(f"\n\ntheta_x,theta_y: {thetax,thetay},{thetax.shape,thetay.shape}\n\n")
+
+    # x_conv = np.linspace(0-scan_angle_from_center,scan_angle-scan_angle_from_center,num=x)
+    # y_conv = np.linspace(0-scan_angle_from_center,scan_angle-scan_angle_from_center,num=y)
+    x_conv = np.linspace(-min_scan_angle,min_scan_angle,num=x)
+    y_conv = np.linspace(-min_scan_angle,min_scan_angle,num=y)
+
+    print(f"conversion shapes: {x_conv.shape},{y_conv.shape}\n\n")
+
+    x_degree = np.repeat(x_conv[:,None],y,axis=1)
+    y_degree = np.repeat(y_conv[None,:],x,axis=0)
+
+    x_rad = x_degree/(2*np.pi)/4
+    y_rad = y_degree/(2*np.pi)/4
+    # x_degree = np.tile(x_conv[:,None],(1,y))
+    # y_degree = np.tile(y_conv,(x,1))
+    
+
+    #y_degree = np.repeat(y_conv[:,None],y,axis=1)
+    #print(f"\n\n\nthetax:{thetax[0],thetax[0].shape}\n\n")
+    # print(f"x_conv: {x_conv},{x_conv.shape}\n\n")
+    # print(f"y_conv: {y_conv},{y_conv.shape}\n\n")
+
+    print(f"x_degree: {x_degree}\n{x_degree.shape}\n")
+    print(f"y_degree: {y_degree}\n{y_degree.shape}\n")
+
+    print(f"x_rad: {x_rad}\n{x_rad.shape}\n")
+    print(f"y_rad: {y_rad}\n{y_rad.shape}\n")
+
+
+    factor = np.cos(np.sqrt(x_rad**2+y_rad**2))
+    #factor = np.sqrt(thetax**2 + thetay**2)
+    print (f"factor:{factor}\nfactor shape: {factor.shape}\n\n")
+    print (f"factor at center:{factor[(center_x,center_y)]}\n\n")
+    min_factor = np.unravel_index(factor.argmin(),factor.shape)
+    max_factor = np.unravel_index(factor.argmax(),factor.shape)
+    print(f"factor min: {factor.min(),min_factor}\n\n")
+    print(f"factor max: {factor.max(),max_factor}\n\n")
+
+    #thickness_vals_type = thickness_vals.dtype
+    #thickness_vals = factor*thickness_vals.astype(thickness_vals_type)
+
+    thickness_vals = rdm[(ridge == 4) & (rdm != 0)]
+
+    rdm_type = rdm.dtype
+    adjusted_rdm = factor*rdm.astype(rdm_type)
+
+    new_thickness_vals = adjusted_rdm[(ridge == 4) & (adjusted_rdm != 0)]
+
+    print(f"adjusted_rdm:\n{adjusted_rdm}\nadjusted_rdm shape: {adjusted_rdm.shape}\n")
+    print(f"new_thickness mean:\n{new_thickness_vals.mean()}\nnew_thickness max: {new_thickness_vals.max()}\n")
+    
+    viewer = napari.Viewer()
+    viewer.add_image(rdm)
+    viewer.add_image(x_rad)
+    viewer.add_image(y_rad)
+    viewer.add_image(factor)
+    viewer.add_image(adjusted_rdm)
+
     if thickness_vals.size == 0:
         print("[WARN] No overlapping ridge found. Returning NaN.")
         return float('nan'), float('nan')
@@ -140,7 +214,8 @@ def run_batch(ridge_dir: Path, retchor_dir: Path, viewer: napari.Viewer = None):
                 name=f"Batch: {ridge_file.stem}"
             )
  
-        write_to_excel(retchor_file, mean_t, peak_t)
+        #write_to_excel(retchor_file, mean_t, peak_t) #TODO reimplement this
+
  
     print(f"\nBatch complete. Results appended to '{Path.cwd() / 'ridge_analysis_results.xlsx'}'.")
  
@@ -212,28 +287,43 @@ class BatchRidgeAnalysisWidget(QWidget):
         run_batch(self.ridge_dir_path, self.retchor_dir_path, viewer=self.viewer)
         self.run_batch_btn.setEnabled(True)
         self.status_lbl.setText("Status: Batch complete! Check console & Excel.")
- 
+
+@magicgui(
+    ridge_dir={"label": "Path to folder containing ridge masks.", "mode": "d"},
+    retchor_dir={"label": "Path to folder containing retchor masks", "mode": "d"},
+    call_button="Run Batch Analysis",
+)
+def generate_enface_with_labels(
+    ridge_dir: Path = Path(r"F:\Beth_RetChor_Stuff\old_calc\ridge"),
+    retchor_dir: Path = Path(r"F:\Beth_RetChor_Stuff\old_calc\retchor"),
+):
+    run_batch(ridge_dir, retchor_dir)
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run ridge/retchor thickness analysis (single or batch).")
-    parser.add_argument("ridge_file", nargs="?", help="(Optional) Path to a single ridge file (.npy or .mat).")
-    parser.add_argument("retchor_file", nargs="?", help="(Optional) Path to a single retchor file (.npy).")
-    parser.add_argument("--ridge_dir", type=str, help="(Optional) Path to folder containing ridge masks.")
-    parser.add_argument("--retchor_dir", type=str, help="(Optional) Path to folder containing retchor masks.")
-    args = parser.parse_args()
+    generate_enface_with_labels.show(run=True)
+
  
-    if args.ridge_dir and args.retchor_dir:
-        ridge_dir = Path(args.ridge_dir)
-        retchor_dir = Path(args.retchor_dir)
-        if not ridge_dir.is_dir() or not retchor_dir.is_dir():
-            print("ERROR: One of the provided batch paths is not a directory.")
-            sys.exit(1)
-        run_batch(ridge_dir, retchor_dir)
-        sys.exit(0)
-    elif args.ridge_file and args.retchor_file:
-        run_cli(Path(args.ridge_file), Path(args.retchor_file))
-        sys.exit(0)
-    else:
-        viewer = napari.Viewer()
-        widget = BatchRidgeAnalysisWidget(viewer)
-        viewer.window.add_dock_widget(widget, name="Ridge Batch Analysis", area="right")
-        napari.run()
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(description="Run ridge/retchor thickness analysis (single or batch).")
+#     parser.add_argument("ridge_file", nargs="?", help="(Optional) Path to a single ridge file (.npy or .mat).")
+#     parser.add_argument("retchor_file", nargs="?", help="(Optional) Path to a single retchor file (.npy).")
+#     parser.add_argument("--ridge_dir", type=str, help="(Optional) Path to folder containing ridge masks.")
+#     parser.add_argument("--retchor_dir", type=str, help="(Optional) Path to folder containing retchor masks.")
+#     args = parser.parse_args()
+ 
+#     if args.ridge_dir and args.retchor_dir:
+#         ridge_dir = Path(args.ridge_dir)
+#         retchor_dir = Path(args.retchor_dir)
+#         if not ridge_dir.is_dir() or not retchor_dir.is_dir():
+#             print("ERROR: One of the provided batch paths is not a directory.")
+#             sys.exit(1)
+#         run_batch(ridge_dir, retchor_dir)
+#         sys.exit(0)
+#     elif args.ridge_file and args.retchor_file:
+#         run_cli(Path(args.ridge_file), Path(args.retchor_file))
+#         sys.exit(0)
+#     else:
+#         viewer = napari.Viewer()
+#         widget = BatchRidgeAnalysisWidget(viewer)
+#         viewer.window.add_dock_widget(widget, name="Ridge Batch Analysis", area="right")
+#         napari.run()
