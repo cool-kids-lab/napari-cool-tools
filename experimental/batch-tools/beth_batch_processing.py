@@ -66,7 +66,8 @@ def generate_enface_with_labels(
 ):
     """"""
 
-    file_paths = list(fold_dir.rglob("*_processed.prof"))
+    #file_paths = list(fold_dir.rglob("*_processed.prof"))
+    file_paths = list(fold_dir.rglob("*.prof"))
     #test_file_path = file_paths[0]
 
     if show_in_napari:

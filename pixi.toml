@@ -51,6 +51,7 @@ pypcd4 = "==1.2.1"
 #pptk = "==0.1.0"
 pyvista = "==0.45.*"
 pyvistaqt = "==0.11.*"
+openpyxl = "*"
 
 [feature.cuda11]
 system-requirements = { cuda = "11.0" }
