@@ -1,5 +1,5 @@
 [workspace]
-authors = ["John Jackson <jdjacks@post.harvard.edu>"]
+authors = ["John Jackson <jdjacks@sbcglobal.net>"]
 channels = ["conda-forge"]
 name = "napari-cool-tools-plugins"
 platforms = ["linux-64", "win-64"]
@@ -104,3 +104,4 @@ cuda12-dev = { features = ["development", "cuda12", "visualization"] }
 
 [environments.default]
 features = ["cuda12", "development", "visualization"]
+

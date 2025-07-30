@@ -117,8 +117,12 @@ def estimate_chunk_memory(len_x, len_y, dtype_size, z_chunk_size):
     # Approx for data grid, final grid, interpollation buffers (approx. 100x grid size, Ben's back of the napkin)
     return len_x * len_y * z_chunk_size * dtype_size * 100
 
+<<<<<<< Updated upstream
 
 def get_optimal_chunk_size(len_x, len_y, dtype_size, free_memory, safety_factor=0.7):
+=======
+def get_optimal_chunk_size(len_x, len_y, dtype_size, free_memory, safety_factor=0.3):
+>>>>>>> Stashed changes
     # Use a safety factor to leave some room for other processes
     available_memory = free_memory * safety_factor
     z_chunk_size = 1  # Start with a small chunk size
@@ -138,6 +142,7 @@ def _on_init(widget):
             return
 
         input_image = viewer.layers[widget.input_vol.current_choice]
+<<<<<<< Updated upstream
         cartify_function(
             input_image,
             widget.scan_angle.value,
@@ -147,6 +152,9 @@ def _on_init(widget):
             widget.chunk_size.value,
             widget.circleCrop.value,
         )
+=======
+        cartify_function(input_image, widget.ref_indx.value, widget.scan_angle.value,  widget.down_sample.value, widget.res.value, widget.threshold.value, widget.circleCrop.value)
+>>>>>>> Stashed changes
 
     @widget.vis_3d_button.clicked.connect
     def do_vis_3d_button():
@@ -179,16 +187,21 @@ def _on_init(widget):
     pivot_point=dict(widget_type="FloatSpinBox", value=19.0),
     ref_motor_loc=dict(widget_type="FloatSpinBox", value=0.0),
     img_motor_loc=dict(widget_type="FloatSpinBox", value=0.0),
+<<<<<<< Updated upstream
     ds=dict(widget_type="SpinBox", value=1),
     res=dict(widget_type="FloatSpinBox", value=1 / 6),
+=======
+    down_sample=dict(widget_type="SpinBox", value=2),
+    res=dict(widget_type="FloatSpinBox", value=1.0),
+>>>>>>> Stashed changes
     threshold=dict(widget_type="SpinBox", value=5),
-    chunk_size=dict(widget_type="SpinBox", value=16),
     circleCrop=dict(widget_type="SpinBox", value=1),
     vol_threshold=dict(widget_type="FloatSpinBox", value=1.0),
     vol_opac=dict(widget_type="FloatSpinBox", value=0.5),
-    isovalue=dict(widget_type="FloatSpinBox", value=5),
+    isovalue=dict(widget_type="FloatSpinBox", value=5.0),
     vis_3d_button=dict(widget_type="PushButton", text="Volume Render"),
     surf_3d_button=dict(widget_type="PushButton", text="Surface Render"),
+<<<<<<< Updated upstream
     save_button=dict(widget_type="PushButton", text="Save as BigTiff"),
 )
 def cartify(
@@ -214,6 +227,14 @@ def cartify(
     surf_3d_button,
     save_button,
 ):
+=======
+    save_button=dict(widget_type="PushButton", text="Save as BigTiff")
+    )
+def cartify(input_vol: Image, scan_angle, ref_indx, imaging_range, pivot_point, ref_motor_loc, img_motor_loc, 
+            down_sample, res, threshold, circleCrop, curve_correct_button, 
+            input_vol_3d: Image, vol_threshold, vol_opac, vis_3d_button, 
+            input_surf_3d: Image, isovalue, surf_3d_button, save_button):
+>>>>>>> Stashed changes
     return
 
 
@@ -223,12 +244,18 @@ def cartify(
 
 @thread_worker(connect={"returned": viewer.add_layer})
 # def cartify_function(input_image: Image, sweep=102, ds=1, res=1/6, threshold=5, chunk_size=16, circleCrop = 1):
+<<<<<<< Updated upstream
 def cartify_function(
     input_image: Image, sweep, ds, res, threshold, chunk_size, circleCrop
 ):
+=======
+def cartify_function(input_image: Image, ref_indx, sweep, ds, res, threshold, circleCrop):
+
+>>>>>>> Stashed changes
     log_time("Starting cartify function")
     data = input_image.data
     log_time("Data loaded. Shape is:")
+
     if ds > 1:
         data = block_reduce(data, block_size=(ds, ds, ds), func=np.mean)
 
@@ -319,8 +346,13 @@ def surfacerender_function(input_image: Image, isovalue, color="lightblue"):
         log_time("Mesh Generated")
         plotter = BackgroundPlotter()
         plotter.add_mesh(mesh, color=color)
+<<<<<<< Updated upstream
         plotter.show_grid()  # Add grid lines to the background
         plotter.add_axes()  # Add axes for orientation)
+=======
+        # plotter.show_grid()  # Add grid lines to the background
+        # plotter.add_axes()   # Add axes for orientation)
+>>>>>>> Stashed changes
         plotter.show()
         return "Rendering"
     except Exception as e:
