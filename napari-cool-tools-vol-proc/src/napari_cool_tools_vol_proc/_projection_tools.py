@@ -9,27 +9,80 @@ from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info
 from napari_cool_tools_io import viewer
 
+from napari_cool_tools_vol_proc import ProjectionDir, ProjectionType
 
-def mip(img: Image, yx=True, zy=False, xz=False):
-    """Generate maximum intensity projections (MIP) along selected orthoganal image planes from structural OCT data.
+
+def projection_plugin(
+    img: Layer,
+    axis: ProjectionDir = ProjectionDir.EN_FACE,
+    projection_type: ProjectionType = ProjectionType.MAX,
+):
+    """Generate projection along selected axis from structural OCT data.
 
     Args:
-        img (Image): 3D ndarray representing structural OCT data
-        xy (bool): Toggle xy plane MIP (enface plane by default)
-        yz (bool): Toggle yz plane MIP
-        zx (bool): Toggle zx plane MIP
+        img: Napari Layer containing 3D structural OCT data
+        axis: Axis along which to project EN_FACE,FAST_AXIS,SLOW_AXIS
+        projection_type: MAX,MEAN,ARGMAX,MIN,ARGMIN
 
     Returns:
-        List of napari Layers containing selected MIP planes
+        None
+
+    Raises:
+        ValueError: If data dimension is not == 3
     """
 
-    mip_thread(img=img, yx=yx, zy=zy, xz=xz)
+    projection_thread(img=img, axis=axis, projection_type=projection_type)
 
     return
 
 
+@thread_worker(connect={"returned": viewer.add_layer})
+def projection_thread(
+    img: Layer,
+    axis: ProjectionDir = ProjectionDir.EN_FACE,
+    projection_type: ProjectionType = ProjectionType.MAX,
+):
+    """Generate projection along selected axis from structural OCT data.
+
+    Args:
+        img: Napari Layer containing 3D structural OCT data
+        axis: Axis along which to project EN_FACE,FAST_AXIS,SLOW_AXIS
+        projection_type: MAX,MEAN,ARGMAX,MIN,ARGMIN
+
+    Returns:
+        Layer containing selected projection
+
+    Raises:
+        ValueError: If data dimension is not == 3
+    """
+    from napari_cool_tools_vol_proc._projection_tools_funcs import projection
+
+    data = img.data
+    name = img.name
+    axis_suffix = ""
+    if axis == ProjectionDir.EN_FACE:
+        axis_suffix = "en_face"
+    elif axis == ProjectionDir.FAST_AXIS:
+        axis_suffix = "fast_axis"
+    elif axis == ProjectionDir.SLOW_AXIS:
+        axis_suffix = "slow_axis"
+
+    add_kwargs = {"name": f"{name}_{axis_suffix}"}
+    layer_type = img.as_layer_data_tuple()[2]
+
+    show_info(f"{axis_suffix.capitalize()} Projection thread has started")
+    data = projection(data=data, axis=axis.value, projection_type=projection_type.value)
+    layer = Layer.create(data, add_kwargs, layer_type)
+
+    show_info(f"{axis_suffix.capitalize()} Projection thread has completed")
+
+    return layer
+
+
 @thread_worker(connect={"yielded": viewer.add_layer})
-def mip_thread(img: Image, yx=True, zy=False, xz=False) -> Generator[Layer,Layer,Layer]:
+def mip_thread(
+    img: Image, yx=True, zy=False, xz=False
+) -> Generator[Layer, Layer, Layer]:
     """Generate maximum intensity projections (MIP) along selected orthoganal image planes.
 
     Args:

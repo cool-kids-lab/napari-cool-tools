@@ -22,9 +22,3 @@ class OCTACalc(Enum):
     STD = "Standard Deviation"
     VAR = "Variance"
     VAR2 = "Variance Squared"
-
-
-class EnfaceAccumulation(Enum):
-    MAX = 0
-    MEAN = 1
-    MIN = 2

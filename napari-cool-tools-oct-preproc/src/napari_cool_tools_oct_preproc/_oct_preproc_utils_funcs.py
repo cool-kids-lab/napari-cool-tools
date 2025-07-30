@@ -15,28 +15,33 @@ from napari_cool_tools_io import torch
 from napari_cool_tools_registration._registration_tools_funcs import (
     a_scan_correction_func2,
 )
+from napari_cool_tools_segmentation import EnfaceSegmentationType
+from napari_cool_tools_vol_proc import ProjectionType
 from napari_cool_tools_vol_proc._averaging_tools_funcs import average_per_bscan_pt
+from napari_cool_tools_vol_proc._projection_tools_funcs import projection
 from tqdm import tqdm
 
 from napari_cool_tools_oct_preproc import (
     Augmentation,
-    EnfaceAccumulation,
     OCTACalc,
     Preproc,
 )
 
-
-def return_enface_accumulation(
-    data: ImageData,
-    accumulation_type: EnfaceAccumulation = EnfaceAccumulation.MAX,
-    axis: int = 1,
-):
-    if accumulation_type == EnfaceAccumulation.MAX:
-        return data.max(axis=axis)
-    if accumulation_type == EnfaceAccumulation.MEAN:
-        return data.mean(axis=axis)
-    if accumulation_type == EnfaceAccumulation.MIN:
-        return data.min(axis=axis)
+# def return_enface_accumulation(
+#     data: ImageData,
+#     accumulation_type: EnfaceAccumulation = EnfaceAccumulation.MAX,
+#     axis: int = 1,
+# ):
+#     if accumulation_type == EnfaceAccumulation.MAX:
+#         return data.max(axis=axis)
+#     if accumulation_type == EnfaceAccumulation.MEAN:
+#         return data.mean(axis=axis)
+#     if accumulation_type == EnfaceAccumulation.ARGMAX:
+#         return data.argmax(axis=axis)
+#     if accumulation_type == EnfaceAccumulation.ARGMIN:
+#         return data.argmin(axis=axis)
+#     if accumulation_type == EnfaceAccumulation.MIN:
+#         return data.min(axis=axis)
 
 
 def data_augmentation(
@@ -199,14 +204,114 @@ def data_augmentation(
 
     return out
 
-
-def preproc_bscan(
+def preproc_bscan2(
     vol: ImageData,
     transform: Preproc = Preproc.NLCGbBb,
     ascan_corr: bool = True,
     Bandpass: bool = False,
     log_cor: bool = False,
     vol_proc: bool = False,
+    chunk_shuff: bool = True,
+    debug: bool = False,
+    processor="cpu",
+    chunk_size: int = 1,
+    fov: int = 116,
+    log_gain=2.5,
+    clahe_clip_limit=1.0,
+    b_blur_ks=(3, 3),
+    b_blur_sc=0.1,
+    b_blur_ss=(1.0, 1.0),
+    b_blur_bt="reflect",
+    g_blur_ks=(3, 3),
+    g_blur_s=(1.0, 1.0),
+    g_blur_bt="reflect",
+) -> ImageData:
+    """"""
+    import torch
+    from jj_nn_framework.image_funcs import normalize_in_range
+    from torchvision.transforms.v2 import Normalize
+    #axes = np.arange(vol.ndim)
+    #axes = torch.arange(vol.ndim)
+    output = vol
+
+    for axis in [0]:#axes[(0,2)]:
+        vol_t = torch.tensor(output.swapaxes(0,axis).copy()).cuda()
+        output_t = torch.empty_like(vol_t).cuda()
+        mean = torch.tensor(0).cuda()
+        std = torch.tensor(0).cuda()
+        for img in vol_t: 
+            mean = mean + img.mean()
+            std = std + img.std()
+
+        print(f"mean/std: {mean}/{std}\n")
+        standardize = Normalize(mean=[mean],std=[std])
+
+        for idx,img in enumerate(vol_t):
+            output_t[idx] = normalize_in_range(standardize(img[None,None,:,:]).squeeze(),min_val=0.0,max_val=1.0) 
+
+        output = output_t.detach().cpu().numpy().swapaxes(0,axis)
+
+        del output_t,vol_t
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+        gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
+        print(f"GPU memory is clear: {gpu_mem_clear}\n")
+
+        if not gpu_mem_clear:
+            print(f"{torch.cuda.memory_summary()}\n")
+    
+    #mean = mean.detach().cpu().item()/vol.shape[0]
+    #std = std.detach().cpu().item()/vol.shape[0]
+    # slices = [
+    #     slice(None,vol.shape[-2],vol.shape[-1]),
+    #     slice(vol.shape[-3],None,vol.shape[-1]),
+    #     slice(vol.shape[-3],vol.shape[-2],None)
+    # ]
+    # print(f"axes/slices: {[(axes[idx],slices[idx]) for idx in range(len(axes))]}")
+
+    # for axis in axes:
+    #     slice_list = [None,None,None]
+    #     not_axis = axes - {axis}
+    #     for n_axis in not_axis:
+    #         slice_list[n_axis] = slice(None) #slice(0,vol.shape[n_axis],1)
+        
+        #mean_along_axis = 0
+        #std_along_axis = 0
+
+        # for axis_idx in tqdm(range(vol.shape[axis]),f"Calculate Mean/Std along {axis}."):
+        #     slice_list[axis] = slice(axis_idx,axis_idx+1,1)
+
+            #print(f"current axis/slice: {axis,slice_list}\n")
+            #print(f"slice shape: {vol[*slice_list].shape}\n")
+
+            #mean_along_axis = mean_along_axis + vol[*slice_list].mean(axis=axis)
+            #std_along_axis = std_along_axis + vol[*slice_list].std(axis=axis)
+
+        #mean_along_axis = mean_along_axis/vol.shape[axis]
+        #std_along_axis = std_along_axis/vol.shape[axis]
+
+        # for axis_idx in tqdm(range(vol.shape[axis]),desc=f"Standardizing along axis {axis}"):
+        #     standardize = Normalize(mean=[mean_along_axis],std=[std_along_axis])
+        #     slice_list[axis] = slice(axis_idx,axis_idx+1,1)
+        #     vol[*slice_list] = standardize(torch.from_numpy(vol[*slice_list]).cuda()).cpu().numpy()
+        
+        # if axis == 0:
+        #     break
+
+    
+
+    return output #.swapaxes(-1,-3) #vol
+
+
+def preproc_bscan(
+    vol: ImageData,
+    transform: Preproc = Preproc.SN,
+    bg_rm_ct_adj: bool = True,
+    ascan_corr: bool = False,
+    Bandpass: bool = False,
+    log_cor: bool = False,
+    vol_proc: bool = True,
     chunk_shuff: bool = True,
     debug: bool = False,
     processor="cpu",
@@ -231,6 +336,7 @@ def preproc_bscan(
         NapStandNormLog,
         NapStandNormLogCLAHE,
     )
+    from napari_cool_tools_img_proc._equalization_funcs import init_bscan_preproc
 
     bscan_preproc = BscanPreproc(
         log_gain=log_gain,
@@ -418,12 +524,15 @@ def preproc_bscan(
     if not gpu_mem_clear:
         print(f"{torch.cuda.memory_summary()}\n")
 
+    if bg_rm_ct_adj:
+        out = init_bscan_preproc(out)
+
     return out
 
 
 def generate_enface(
     data: ImageData,
-    projection_type: EnfaceAccumulation = EnfaceAccumulation.MAX,
+    projection_type: ProjectionType.MAX,  # EnfaceAccumulation = EnfaceAccumulation.MAX,
     sin_correct: bool = True,
     exp: bool = False,
     n: float = 2,
@@ -464,10 +573,12 @@ def generate_enface(
     # show_info(f'Generate enface image thread has started')
 
     show_info("Generating initial enface MIP")
-    yx = data.transpose(1, 2, 0)
-    # enface_mip = yx.max(0)
-    enface_mip = return_enface_accumulation(
-        yx, accumulation_type=projection_type, axis=0
+    # yx = data.transpose(1, 2, 0) # possible add back for display purposes using generator yield post process?
+
+    enface_mip = projection(
+        data=data,
+        projection_type=projection_type.value,
+        axis=1,
     )
     print(f"enface_mip shape: {enface_mip.shape}\n")
 
@@ -556,6 +667,43 @@ def generate_enface(
     # return layers
 
 
+def generate_3D_feature_segmentation(
+    volume_data: ImageData,
+    label_val: int = 10,
+    feature_type: EnfaceSegmentationType = EnfaceSegmentationType.VESSEL,
+):
+    """"""
+    import numpy as np
+    import torch
+    from napari_cool_tools_segmentation._segmentation_funcs import enface_onnx_seg_func
+
+    mip = projection(volume_data, axis=1, projection_type=ProjectionType.MAX.value)
+    mip_y = projection(volume_data, axis=1, projection_type=ProjectionType.ARGMAX.value)
+
+    vessel_mask = enface_onnx_seg_func(
+        mip, onnx_path=feature_type.value, DoG=True
+    ).astype(bool)
+
+    print(f"vessel_mask shape: {vessel_mask.shape}")
+
+    #vessel_mask_t = torch.tensor(vessel_mask.copy())[None,:,:][None,:,:,:]
+    vessel_mask_t = torch.tensor(vessel_mask.copy())[None,None,:,:]*1.0
+
+    print(f"vessel_mask_t shape: {vessel_mask_t.shape}")
+
+    #skeletonize = Skeletonize()
+    #vessel_mask = skeletonize(vessel_mask_t.cuda()).to("cpu").squeeze().numpy()
+
+    x_coord, z_coord = vessel_mask.nonzero()
+    y_coord = mip_y[(x_coord, z_coord)]
+    vessel_indxs = (x_coord, y_coord, z_coord)
+
+    feature_label_data = np.zeros_like(volume_data).astype(np.uint8)
+    feature_label_data[vessel_indxs] = label_val
+
+    return feature_label_data
+
+
 def generate_octa_var(
     data: ImageData,
     mscans: int = 3,
@@ -640,7 +788,7 @@ def generate_octa(
 
     if avg_dat:
         out_data = average_per_bscan_pt(
-            out_data, scans_per_avg=octa_data_avg, ensemble=True
+            out_data, scans_per_avg=octa_data_avg, ensemble=False
         )
 
     if not enface_only:

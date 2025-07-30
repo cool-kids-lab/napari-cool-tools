@@ -7,7 +7,8 @@ import gc
 import kornia.morphology as morph
 import torch
 from napari.types import ImageData
-from tqdm import tqdm
+
+#from tqdm import tqdm
 
 
 def morphological_dilation(
@@ -60,7 +61,8 @@ def morphological_dilation(
         out_data_t = morph.dilation(data_t, kernel).squeeze()
     else:
         out_data_t = torch.zeros_like(data_t).to(proc)
-        for i in tqdm(range(data_t.shape[-3]), desc="Dilating"):
+        #for i in tqdm(range(data_t.shape[-3]), desc="Dilating"):
+        for i in range(data_t.shape[-3]):
             out_data_t[:, i, :, :] = morph.dilation(
                 data_t[:, i, :, :].unsqueeze(0), kernel
             ).squeeze()
@@ -122,7 +124,8 @@ def morphological_erosion(
         out_data_t = morph.erosion(data_t, kernel).squeeze()
     else:
         out_data_t = torch.zeros_like(data_t)
-        for i in tqdm(range(data_t.shape[-3]), desc="Eroding"):
+        #for i in tqdm(range(data_t.shape[-3]), desc="Eroding"):
+        for i in range(data_t.shape[-3]):
             out_data_t[:, i, :, :] = morph.erosion(
                 data_t[:, i, :, :].unsqueeze(0), kernel
             ).squeeze()

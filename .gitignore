@@ -177,4 +177,14 @@ cython_debug/
 *.engine
 *.timing
 *.profile
+
+# Pixi
+.pixi
 pixi.lock
+
+# Shortcuts
+*-Shortcut
+*.lnk
+
+# vscode settings
+.vscode/settings.json

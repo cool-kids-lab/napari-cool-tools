@@ -8,6 +8,9 @@ contributions:
     - id: napari-cool-tools-vol-proc.avg_per_bscan
       title: Average per Bscan
       python_name: napari_cool_tools_vol_proc._averaging_tools:average_per_bscan_plugin
+    - id: napari-cool-tools-vol-proc.project
+      title: Projection (Orthogonal)
+      python_name: napari_cool_tools_vol_proc._projection_tools:projection_plugin
     - id: napari-cool-tools-vol-proc.mip
       title: Maximum Intensity Projection (Orthogonal)
       python_name: napari_cool_tools_vol_proc._projection_tools:mip
@@ -74,6 +77,9 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-vol-proc.avg_per_bscan
       display_name: Average per Bscan
+      autogenerate: true
+    - command: napari-cool-tools-vol-proc.project
+      display_name: Projection (Orthogonal)
       autogenerate: true
     - command: napari-cool-tools-vol-proc.mip
       display_name: MIP (Orthogonal)

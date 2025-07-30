@@ -11,11 +11,12 @@ from napari.qt.threading import thread_worker
 from napari.types import ImageData
 from napari.utils.notifications import show_info
 from napari_cool_tools_io import memory_stats, torch, viewer
+from napari_cool_tools_segmentation import EnfaceSegmentationType
+from napari_cool_tools_vol_proc import ProjectionType
 from tqdm import tqdm
 
 from napari_cool_tools_oct_preproc import (
     Augmentation,
-    EnfaceAccumulation,
     OCTACalc,
     Preproc,
 )
@@ -93,7 +94,7 @@ def resize_image_thread(
 
 def generate_enface_plugin(
     img: Image,
-    projection_type: EnfaceAccumulation = EnfaceAccumulation.MAX,
+    projection_type: ProjectionType = ProjectionType.MAX,
     sin_correct: bool = True,
     exp: bool = False,
     n: float = 2,
@@ -140,7 +141,7 @@ def generate_enface_plugin(
 @thread_worker(connect={"yielded": viewer.add_layer})
 def generate_enface_thread(
     img: Image,
-    projection_type: EnfaceAccumulation = EnfaceAccumulation.MAX,
+    projection_type: ProjectionType = ProjectionType.MAX,
     sin_correct: bool = True,
     exp: bool = False,
     n: float = 2,
@@ -196,6 +197,52 @@ def generate_enface_thread(
         yield layer
 
     show_info("Generate enface image thread has completed")
+
+
+def generate_3D_feature_segmentation_from_enface_plugin(
+    img: Layer,
+    label_val: int = 10,
+    feature_type: EnfaceSegmentationType = EnfaceSegmentationType.VESSEL,
+):
+    """ """
+    generate_3D_feature_segmentation_from_enface_thread(
+        img=img,
+        label_val=label_val,
+        feature_type=feature_type,
+    )
+
+
+@thread_worker(connect={"returned": viewer.add_layer})
+def generate_3D_feature_segmentation_from_enface_thread(
+    img: Layer,
+    label_val: int = 10,
+    feature_type: EnfaceSegmentationType = EnfaceSegmentationType.VESSEL,
+) -> Layer:
+    """ """
+
+    from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import (
+        generate_3D_feature_segmentation,
+    )
+
+    name = f"{img.name}_enface"
+    layer_type = "labels"
+
+    if feature_type == EnfaceSegmentationType.VESSEL:
+        suffix = "vessels"
+    elif feature_type == EnfaceSegmentationType.OPTICNERVEHEAD:
+        suffix = "optix_nerve"
+    elif feature_type == EnfaceSegmentationType.RIDGE:
+        suffix = "ridge"
+
+    feature_label_data = generate_3D_feature_segmentation(
+        volume_data=img.data,
+        label_val=label_val,
+        feature_type=feature_type,
+    )
+
+    add_kwargs = {"name": f"{name}_3D_{suffix}"}
+    layer = Layer.create(feature_label_data, add_kwargs, layer_type)
+    return layer
 
 
 def generate_enface_image(
@@ -628,13 +675,14 @@ def data_augmentation_thread(
 
 def preproc_bscan_plugin(
     vol: Image,
-    transform: Preproc = Preproc.NLCGbBb,
-    ascan_corr: bool = True,
+    transform: Preproc = Preproc.SN,
+    bg_rm_ct_adj: bool = True,
+    ascan_corr: bool = False,
     Bandpass: bool = False,
     log_cor: bool = False,
-    vol_proc: bool = False,
-    chunk_shuff: bool = True,
-    gpu: bool = True,
+    vol_proc: bool = True,
+    chunk_shuff: bool = False,
+    gpu: bool = False,
     debug: bool = False,
     chunk_size: int = 1,
     fov: int = 116,
@@ -652,6 +700,7 @@ def preproc_bscan_plugin(
     preproc_bscan_thread(
         vol,
         transform=transform,
+        bg_rm_ct_adj=bg_rm_ct_adj,
         ascan_corr=ascan_corr,
         Bandpass=Bandpass,
         log_cor=log_cor,
@@ -678,13 +727,14 @@ def preproc_bscan_plugin(
 @thread_worker(connect={"returned": viewer.add_layer})
 def preproc_bscan_thread(
     vol: Image,
-    transform=Preproc.NLCGbBb,
-    ascan_corr: bool = True,
+    transform=Preproc.SN,
+    bg_rm_ct_adj: bool = True,
+    ascan_corr: bool = False,
     Bandpass: bool = False,
     log_cor: bool = False,
-    vol_proc: bool = False,
-    chunk_shuff: bool = True,
-    gpu: bool = True,
+    vol_proc: bool = True,
+    chunk_shuff: bool = False,
+    gpu: bool = False,
     debug: bool = False,
     chunk_size: int = 1,
     fov: int = 116,
@@ -719,6 +769,7 @@ def preproc_bscan_thread(
     out = preproc_bscan(
         vol.data,
         transform=transform,
+        bg_rm_ct_adj=bg_rm_ct_adj,
         ascan_corr=ascan_corr,
         Bandpass=Bandpass,
         log_cor=log_cor,
