@@ -17,7 +17,7 @@ from napari_cool_tools_img_proc._normalization_funcs import (
 )
 
 
-def convert_dtype_plugin(img: Image,datatype:DType=DType.NP_FLOAT64,debug=False):
+def convert_dtype_plugin(img: Image,datatype:DType=DType.NP_FLOAT32,debug=False):
     """"""
     convert_dtype_thread(img=img,datatype=datatype,debug=debug)
 
@@ -25,7 +25,7 @@ def convert_dtype_plugin(img: Image,datatype:DType=DType.NP_FLOAT64,debug=False)
 
 
 @thread_worker(connect={"returned": viewer.add_layer})
-def convert_dtype_thread(img: Image,datatype:DType=DType.NP_FLOAT64,debug=False):
+def convert_dtype_thread(img: Image,datatype:DType=DType.NP_FLOAT32,debug=False):
     """"""
 
     show_info("Type conversion thread started")
@@ -136,8 +136,8 @@ def normalize_in_range(
     """
 
     if (
-        #img.data.dtype != np.dtype(np.uint8)
-        img.data.dtype != np.dtype(np.float16)
+        img.data.dtype != np.dtype(np.uint8)
+        and img.data.dtype != np.dtype(np.float16)
         and img.data.dtype != np.dtype(np.float32)
         and img.data.dtype != img.data(np.float64)
     ):
@@ -182,12 +182,12 @@ def normalize_in_range_thread(
     #     data = img.data.astype(np.float64)
     #     convert_flag = True
 
-    # nrm_data = normalize_data_in_range_func(data,min_val=min_val,max_val=max_val)
-
+    nrm_data = normalize_data_in_range_func(img.data,min_val=min_val,max_val=max_val)
+    
     # if convert_flag:
     #     nrm_data = nrm_data.astype(input_type)
 
-    layer = Layer.create(img.data, add_kwargs, layer_type)
+    layer = Layer.create(nrm_data, add_kwargs, layer_type)
 
     return layer
 

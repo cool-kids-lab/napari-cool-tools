@@ -188,3 +188,5 @@ pixi.lock
 
 # vscode settings
 .vscode/settings.json
+.vscode/
+.vscode
