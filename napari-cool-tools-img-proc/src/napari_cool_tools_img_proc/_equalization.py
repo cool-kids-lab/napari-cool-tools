@@ -21,7 +21,7 @@ def init_bscan_preproc_plugin(
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT64,
+    dtype: DType = DType.NP_FLOAT32,
 ):
     """
     Args:
@@ -44,7 +44,7 @@ def init_bscan_preproc_thread(
     num_std: int = 16,
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
-    dtype: DType = DType.NP_FLOAT64,
+    dtype: DType = DType.NP_FLOAT32,
 ) -> Layer:
     """
     Args:

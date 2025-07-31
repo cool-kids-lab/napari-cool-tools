@@ -14,9 +14,6 @@ contributions:
     - id: napari-cool-tools-io.mat_get_reader
       python_name: napari_cool_tools_io._mat_reader:mat_get_reader
       title: Open .mat
-    - id: napari-cool-tools-io.numpy_get_reader
-      python_name: napari_cool_tools_io._numpy_reader:numpy_get_reader
-      title: Open numpy .npy
     - id: napari-cool-tools-io.torch_get_reader
       python_name: napari_cool_tools_io._torch_reader:torch_get_reader
       title: Open pytorch .pt
@@ -84,10 +81,6 @@ contributions:
       accepts_directories: false
       filename_patterns:
       - '*.mat'
-    - command: napari-cool-tools-io.numpy_get_reader
-      accepts_directories: false
-      filename_patterns:
-      - '*.npy'
     - command: napari-cool-tools-io.torch_get_reader
       accepts_directories: false
       filename_patterns:

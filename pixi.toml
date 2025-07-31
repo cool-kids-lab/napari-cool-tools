@@ -100,8 +100,3 @@ cuda12-dev = { features = ["development", "cuda12", "visualization"] }
 
 ## Make CPU the default environment
 #default = { features = ["cpu"] }
-
-
-[environments.default]
-features = ["cuda12", "development", "visualization"]
-
