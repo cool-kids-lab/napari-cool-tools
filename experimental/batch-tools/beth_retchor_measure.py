@@ -185,7 +185,8 @@ def ridge_analysis(
     if incedence_correction:
         thickness_vals = corrected_thickness_vals
     if micrometer_output:
-        thickness_vals = imaging_range / refractive_index * thickness_vals
+        conv_factor = imaging_range / retchor.shape[1] * 1000 / refractive_index # imaging range in mm / ascan len in pixels * um/mm * refractive index ratio = um/pixel
+        thickness_vals = conv_factor * thickness_vals # um/pixel * pixels = um
 
         if verbose or debug:
             print(
@@ -504,6 +505,7 @@ def run_batch(
 @magicgui(
     ridge_dir={"label": "Path to folder containing ridge masks.", "mode": "d"},
     retchor_dir={"label": "Path to folder containing retchor masks", "mode": "d"},
+    output_dir_path={"label": "Path to output results", "mode": "d"},
     call_button="Run Batch Analysis",
 )
 def generate_enface_with_labels(
