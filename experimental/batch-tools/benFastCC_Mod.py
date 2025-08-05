@@ -1,6 +1,7 @@
 import gc
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import cupy as cp
 import napari
@@ -9,7 +10,10 @@ import pyvista as pv
 from cupyx.scipy.ndimage import map_coordinates
 from magicgui import magicgui
 from napari_cool_tools_img_proc import DType
-from napari_cool_tools_img_proc._equalization_funcs import init_bscan_preproc
+from napari_cool_tools_img_proc._equalization_funcs import (
+    init_bscan_preproc,
+    normalize_data_in_range_func,
+)
 from napari_cool_tools_registration._registration_tools_funcs import (
     a_scan_correction_func2,
 )
@@ -111,8 +115,8 @@ def spherical2cartesian_chunked(
 def cartify(
     data: np.ndarray,
     sweep=102,
-    ds=1,
-    res=1 / 6,
+    ds=1, #downsample factor
+    res=1 / 6, # resolution
     threshold=5,
     chunk_size=16,
     save=False,
@@ -126,7 +130,7 @@ def cartify(
         # data = data[::ds, ::ds, ::ds]
 
     thetax, r, thetay = data.shape
-    r_pad = int(round(r * 1.66))
+    r_pad = int(round(r * 1.66)) # what is the constant 1.66 is this distance to the pivot point?
     zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
         data,
@@ -177,8 +181,8 @@ def cartify(
     dtype_size = cp.dtype(data.dtype).itemsize
     chunk_size = get_optimal_chunk_size(len(x), len(y), dtype_size, free_mem)
     print(f"optimal chunk size is: {chunk_size}")
-    chunk_size = 32
-    print(chunk_size)
+    chunk_size = 16 #32
+    print(f"using chunk size {chunk_size}")
 
     log_time("Warping to Cartesian coordinates")
     cart_image = spherical2cartesian_chunked(
@@ -326,15 +330,16 @@ def generate_fast_curve_correction(
     label_path: Path = Path(
         r"D:\JJ\Projects\Segmentation_Paper\Data\Bscan\Figure_Sample_Scans\fold_4_label_predictions.prof"
     ),
-    output_dir: Path = Path(
-        r"D:\JJ\Projects\Segmentation_Paper\Data\Bscan\Figure_Sample_Scans"
-    ),
+    output_dir: Path = Path(r"D:\JJ\Projects\RT_Registration\Data\Test_Output"),
     output_filename: str = "output.pt",
     sweep: int = 102,
-    downsampling: int = 3,
-    resolution: float = 1 / 6,
-    threshold: int = 15,  # 60
-    isovalue: int = 3,
+    downsampling: int = 1, #3,
+    resolution: float = 1.0, #1 / 6,
+    threshold: int = 60, #15,  # 60
+    isovalue: int = 35,
+    init_preproc: bool = False,
+    render_style: Literal["volume", "surface", "points","none"] = "volume",
+    display_in_napari: bool = True,
     save_pcd: bool = False,
     save_npy: bool = False,
     use_gpu: bool = True,
@@ -350,13 +355,16 @@ def generate_fast_curve_correction(
     if sin_correct:
         image_data = a_scan_correction_func2(image_data)
 
-    preproc_data = init_bscan_preproc(
-        image_data,
-        num_std=16,
-        min_intensity=0.0,
-        max_intensity=255.0,
-        dtype=DType.NP_UINT8,
-    )
+    if init_preproc:
+        preproc_data = init_bscan_preproc(
+            image_data,
+            num_std=16,
+            min_intensity=0.0,
+            max_intensity=255.0,
+            dtype=DType.NP_UINT8,
+        )
+    else:
+        preproc_data = normalize_data_in_range_func(image_data,min_val=0.0,max_val=255.0).astype(np.uint8)
 
     print(type(image_data), image_data.shape)
     # del viewer
@@ -373,15 +381,24 @@ def generate_fast_curve_correction(
         save=False,
     )
 
+    # orient for proper viewing in Napari
+    cart = cart.transpose(0,2,1)
+
     print(f"print cartesian stats: {type(cart)}, {cart.dtype},{cart.shape}\n")
-    # surfacerender(cart, isovalue = isovalue)
-    volumerender(cart, 0.2)
-    pointcloud_renderer(cart, threshold=9)
-    # viewer.add_image(cart,name="uncle_ben-s_curve_correction")
-    viewer.add_image(cart.transpose(0, 2, 1), name="uncle_ben-s_curve_correction")
-    # viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
-    viewer.show()
-    napari.run()
+
+    if render_style == "volume":
+        volumerender(cart, 0.2)
+    elif render_style == "points":
+        pointcloud_renderer(cart, threshold=9)
+    elif render_style == "surface":
+        surfacerender(cart, isovalue=isovalue)
+
+    if display_in_napari:
+        # viewer.add_image(cart,name="uncle_ben-s_curve_correction")
+        viewer.add_image(cart, name="uncle_ben-s_curve_correction")
+        # viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
+        viewer.show()
+        napari.run()
 
     if save_pcd:
         pcd_numpy_data = numpy_to_pcd_format(data=cart, threshold=threshold)

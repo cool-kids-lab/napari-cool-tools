@@ -6,7 +6,7 @@ import gc
 import platform
 
 # from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from napari.layers import Layer
@@ -23,7 +23,8 @@ from napari_cool_tools_segmentation import (
 
 def bscan_onnx_seg_func(
     img: ImageData,
-    onnx_path=BscanSegmentationType.BSCAN.value,
+    onnx_path=BscanSegmentationType.RETINASEG.value,
+    target_shape:list = [864,864], #(992,800)
     batch_size: int = 32,
     num_workers: int = 0,
     gpu_limit: int = 6,
@@ -46,7 +47,7 @@ def bscan_onnx_seg_func(
     from torchvision.transforms.functional import InterpolationMode
     from torchvision.transforms.v2.functional import resize
 
-    target_shape = (992, 800)
+    #target_shape = (992, 800)
     init_shape = (img.shape[-2], img.shape[-1])
 
     if use_cpu:
@@ -195,15 +196,18 @@ def bscan_onnx_seg_func(
             buffer_ptr=images_tensor.data_ptr(),
         )
 
-        pred_shape = (it_shape[0], len(CLASSES), it_shape[2], it_shape[3])
+        #pred_shape = (it_shape[0], len(CLASSES), it_shape[2], it_shape[3]) # TODO modify for old model or remove
+        pred_shape = (it_shape[0], 1, it_shape[2], it_shape[3])
         pred_tensor = torch.empty(
-            pred_shape, dtype=torch.float32, device=onnx_dev
+            #pred_shape, dtype=torch.float32, device=onnx_dev # TODO modify for old model or remove
+            pred_shape, dtype=torch.uint8, device=onnx_dev
         ).contiguous()  #'cuda:0').contiguous()
         binding.bind_output(
             name="output",
             device_type=onnx_dev,  #'cuda',
             device_id=0,
-            element_type=np.float32,
+            #element_type=np.float32, #TODO modify for old model or remove
+            element_type=np.uint8,
             shape=tuple(pred_tensor.shape),
             buffer_ptr=pred_tensor.data_ptr(),
         )
@@ -218,12 +222,14 @@ def bscan_onnx_seg_func(
         labels = []
 
         for i, mask in enumerate(pred_tensor):
-            label = torch.zeros_like(mask[0], dtype=torch.uint8)
-            mask_argmax = mask.argmax(0)
-            for i, m in enumerate(mask):
-                label[mask_argmax == i] = i
+            # TODO modify for old model or remove
+            # label = torch.zeros_like(mask[0], dtype=torch.uint8)
+            # mask_argmax = mask.argmax(0)
+            # for i, m in enumerate(mask):
+            #     label[mask_argmax == i] = i
 
-            labels.append(label)
+            labels.append(mask)
+            #labels.append(label)
 
         # print(f"label shape: {labels[0].shape}\n")
         labels = torch.stack(labels, dim=0)
@@ -251,10 +257,10 @@ def bscan_onnx_seg_func(
         pred_dl,
         # image_batch,
         images_tensor,
-        label,
-        mask_argmax,
+        #label, # TODO modify for old model or remove
+        #mask_argmax, # TODO modify for old model or remove
         mask,
-        m,
+        #m, # TODO modify for old model or remove
     )
     gc.collect()
     torch.cuda.empty_cache()
@@ -414,6 +420,12 @@ def enface_onnx_seg_func(
     onnx_session = InferenceSession(onnx_path)
     input_name = onnx_session.get_inputs()[0].name
 
+    # TODO either retrain network with 3 channels or come up with new fix
+    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    # x_eq_cpu = x_eq_cpu[:,0,:,:]
+    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    # x_eq_cpu = x_eq_cpu[:,None,:,:]
+
     onnx_inputs = {input_name: x_eq_cpu}
     onnx_outs = onnx_session.run(None, onnx_inputs)
     onnx_out = onnx_outs[0].squeeze().astype(np.uint8)
@@ -454,3 +466,217 @@ def enface_onnx_seg_func(
     torch.cuda.empty_cache()
 
     return final_seg
+
+def bscan_onnx_deconj_func(
+    data: ImageData,
+    onnx_path: Path = BscanSegmentationType.DECONJUGATE.value,
+    target_bscan_dimension: tuple[int, int] = (512, 1024),
+    batch_size: int = 8,  # 32 #16 #8,
+    num_workers: int = 0,
+    gpu_limit: int = 6,
+    use_cpu: bool = False,
+    debug: bool = False,
+) -> tuple[ImageData, str]:
+    """"""
+
+    if data.ndim != 3:
+        raise ValueError(f"3 dim image is required but {data.ndim} was provided")
+
+    import onnxruntime
+    import torch.nn as nn
+    from jj_nn_framework.data_setup import LoadNumpyData
+    from jj_nn_framework.nn_transforms import (
+        Normalize,
+        PadToTargetM,
+        ResizeToFit,
+    )
+    from torch.utils.data import DataLoader
+    from torchvision.transforms.functional import InterpolationMode
+    from torchvision.transforms.v2.functional import resize
+
+    data = data.transpose(-3, -1, -2)  # transpose back to original OCT coordinate system
+
+    target_shape = target_bscan_dimension  # (512, 1024)
+    init_shape = (data.shape[-2], data.shape[-1])
+
+    if use_cpu:
+        processor = "cpu"
+        onnx_dev = "cpu"
+        print(f"Using device {platform.processor()}")
+    else:
+        processor = device
+        onnx_dev = "cuda"
+        device_id = torch.cuda.current_device()
+        print(f"Using device {torch.cuda.get_device_name(device_id)}\n")
+
+    print(f"Onnx file_path: {onnx_path}\n")
+
+    num_bscans = len(data)
+    rem = num_bscans % batch_size
+    if rem != 0:
+        missing_bscans = batch_size - rem
+        fill_shape = (missing_bscans, data.shape[1], data.shape[2])
+        batch_fill = np.empty(fill_shape, dtype=data.dtype)
+        data = np.concatenate([data, batch_fill])
+
+    onnx_folder_path = Path(onnx_path).parents[0]
+
+    print(f"onnx_folder_path: {onnx_folder_path}\n")
+
+    pttm_params = {
+        "h": target_shape[-2],
+        "w": target_shape[-1],
+        "X_data_format": "NHW",
+        "y_data_format": "NHW",
+        "mode": "constant",
+        "value": None,
+        "pad_gt": False,
+        "device": processor,
+    }
+
+    # NormalizeCLAHE2()
+
+    pred_trans = nn.Sequential(
+        ResizeToFit(target_shape),
+        PadToTargetM(**pttm_params),
+        Normalize(),  # Standardize(),Normalize(),
+    )
+
+    pred_ds = LoadNumpyData(
+        data,
+        chunk_size=batch_size,
+        transform=pred_trans,
+        preprocessing=None,
+        device=processor,
+    )
+
+    pred_dl = DataLoader(
+        pred_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
+
+    if use_cpu:
+        providers = [
+            "CPUExecutionProvider",
+        ]
+    else:
+        providers = [
+            (
+                "TensorrtExecutionProvider",
+                {
+                    "device_id": device_id,  # Select GPU to execute
+                    "trt_max_workspace_size": gpu_limit
+                    * 1024
+                    * 1024
+                    * 1024,  # Set GPU memory usage limit
+                    "trt_fp16_enable": True,  # Enable FP16 precision for faster inference
+                    # "trt_int8_enable": True, # Enable INT8 precision for quantized inference
+                    "trt_engine_cache_enable": True,  # True,
+                    "trt_engine_cache_path": onnx_folder_path,
+                    "trt_timing_cache_enable": True,  # True,
+                    "trt_timing_cache_path": onnx_folder_path,
+                    "trt_engine_hw_compatible": False,
+                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    # "trt_profile_min_shapes": f"input:1x1x{target_shape[-2]}x{target_shape[-1]}",
+                    # "trt_profile_opt_shapes": f"input:32x1x{target_shape[-2]}x{target_shape[-1]}",
+                    # "trt_profile_max_shapes": f"input:32x1x{target_shape[-2]}x{target_shape[-1]}",
+                },
+            ),
+            (
+                "CUDAExecutionProvider",
+                {
+                    "device_id": device_id,
+                    "arena_extend_strategy": "kNextPowerOfTwo",
+                    "gpu_mem_limit": gpu_limit * 1024 * 1024 * 1024,
+                    "cudnn_conv_algo_search": "EXHAUSTIVE",
+                    "do_copy_in_default_stream": True,
+                    "cudnn_conv_use_max_workspace": "1",
+                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                },
+            ),
+            "CPUExecutionProvider",
+        ]
+
+    onnx_session = onnxruntime.InferenceSession(onnx_path, providers=providers)
+    input_name = onnx_session.get_inputs()[0].name
+    output_name = onnx_session.get_outputs()[0].name
+
+    if debug:
+        print(f"input_name = {input_name}")
+        print(f"output_name = {output_name}")
+
+    preds = []
+
+    for image_batch in tqdm(pred_dl, desc="Removing complex conjugate from B-scans:"):
+        # bindtensors to onnx session
+        binding = onnx_session.io_binding()
+
+        images_tensor = image_batch.contiguous()
+        it_shape = images_tensor.shape
+
+        if debug:
+            print(f"image_tensor shape: {it_shape}")
+
+        binding.bind_input(
+            name=input_name,
+            device_type=onnx_dev,  #'cuda',
+            device_id=0,
+            element_type=np.float32,
+            shape=tuple(it_shape),
+            buffer_ptr=images_tensor.data_ptr(),
+        )
+
+        pred_shape = it_shape
+        pred_tensor = torch.empty(
+            pred_shape, dtype=torch.float32, device=onnx_dev
+        ).contiguous()
+        binding.bind_output(
+            output_name,
+            device_type=onnx_dev,  #'cuda',
+            device_id=0,
+            element_type=np.float32,
+            shape=tuple(pred_tensor.shape),
+            buffer_ptr=pred_tensor.data_ptr(),
+        )
+
+        # run onnx with binding
+        onnx_session.run_with_iobinding(binding)
+
+        pred_tensor = pred_tensor.detach().squeeze().cpu().numpy()
+        pred_tensor = pred_tensor[:num_bscans]
+        preds.append(pred_tensor)
+
+    gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
+    print(f"GPU memory is clear: {gpu_mem_clear}\n")
+
+    del (
+        pred_ds,
+        pred_dl,
+        images_tensor,
+    )
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
+
+    print(f"GPU memory is clear: {gpu_mem_clear}\n")
+    if not gpu_mem_clear:
+        print(f"{torch.cuda.memory_summary()}\n")
+
+    preds = np.concatenate(preds, axis=0)
+    preds_out = preds[:num_bscans]
+
+    reshaped_out = resize(
+        torch.tensor(preds_out.copy()),
+        (init_shape),
+        interpolation=InterpolationMode.BICUBIC,
+    ).numpy()
+
+    reshaped_out = reshaped_out.transpose(
+        -3, -1, -2
+    )  # transpose back to Napari coordinate system
+
+    output = (reshaped_out, "deconjucated")
+
+    return output

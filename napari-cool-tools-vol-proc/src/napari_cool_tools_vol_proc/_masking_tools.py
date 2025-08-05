@@ -2,7 +2,7 @@
 This module contains code for mainpulating volumetric data with label masks.
 """
 
-from typing import List
+from typing import Generator, List
 
 import numpy as np
 from napari.layers import Image, Labels, Layer
@@ -289,19 +289,35 @@ def isolate_labeled_volume_thread(img: Image, label_vol: Labels, label: int) -> 
 
 
 def project_2d_mask_plugin(
-    img: Image, label_vol: Labels, axis: int = 1, swap_axes: bool = True
+    img: Image,
+    label_vol: Labels,
+    axis: int = 1,
+    swap_axes: bool = False,
+    extract_mask: bool = False,
 ) -> Labels:
     """"""
-    project_2d_mask_thread(img=img, label_vol=label_vol, axis=axis, swap_axes=swap_axes)
+    project_2d_mask_thread(
+        img=img,
+        label_vol=label_vol,
+        axis=axis,
+        swap_axes=swap_axes,
+        extract_mask=extract_mask,
+    )
     return
 
 
-@thread_worker(connect={"returned": viewer.add_layer})
+# @thread_worker(connect={"returned": viewer.add_layer})
+@thread_worker(connect={"yielded": viewer.add_layer})
 def project_2d_mask_thread(
-    img: Image, label_vol: Labels, axis: int = 1, swap_axes: bool = True
-) -> Labels:
+    img: Image,
+    label_vol: Labels,
+    axis: int = 1,
+    swap_axes: bool = False,
+    extract_mask: bool = False,
+) -> Generator[Layer, Layer, Layer]:
+    # ) -> Labels:
     """"""
-    show_info("Project Label along asis thread started")
+    show_info("Project Label along axis thread started")
     name = f"{label_vol.name}_prjct({axis})"
     layer_type = "labels"
     add_kwargs = {"name": f"{name}"}
@@ -310,10 +326,21 @@ def project_2d_mask_thread(
         img_data=img.data, lbl_data=label_vol.data, axis=axis, swap_axes=swap_axes
     )
 
-    layer = Layer.create(out_data, add_kwargs, layer_type)
-    show_info("Project Label along asis thread completed")
+    label_layer = Layer.create(out_data, add_kwargs, layer_type)
 
-    return layer
+    if extract_mask:
+        extracted_data = out_data * img.data
+        name = f"{img.name}_extract"
+        add_kwargs = {"name": name}
+        layer_type = "image"
+        extracted_layer = Layer.create(extracted_data, add_kwargs, layer_type)
+        yield extracted_layer
+
+    yield label_layer
+
+    show_info("Project Label along axis thread completed")
+
+    # return layer
 
 
 def find_brightest_avg_pixels(

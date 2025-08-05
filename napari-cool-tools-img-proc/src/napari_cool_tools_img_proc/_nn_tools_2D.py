@@ -5,6 +5,7 @@ This module contains code for 2D neural network visualization tools
 from enum import Enum
 
 import numpy as np
+import torch
 from napari.layers import Image, Layer
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info
@@ -151,3 +152,23 @@ def pool_2D(
         pool_func = np.mean
     out_data = block_reduce(data, block_size=block_size, func=pool_func)
     return out_data
+
+def U_mask(data:ndarray)->ndarray:
+    """"""
+    from jj_nn_framework.yakub_complex_conjugate_unet import UMask
+    from torchvision.transforms.v2 import Resize
+    
+    u_mask = UMask(in_channels=1,out_channels=1)
+    resize_down = Resize((512,1024))
+    
+    t_data = torch.tensor(data.copy()).permute(-3,-1,-2)
+    resize_up = Resize((t_data.shape[-2],t_data.shape[-1]))
+    t_data =  resize_down(t_data)
+    t_sample = t_data[len(t_data)//2]
+
+    with torch.no_grad():
+        t_out = u_mask(t_sample.unsqueeze(0).unsqueeze(0)).detach()
+    
+    t_out = resize_up(t_out)
+    t_out = t_out.squeeze().permute(-1,-2).numpy()
+    return t_out
