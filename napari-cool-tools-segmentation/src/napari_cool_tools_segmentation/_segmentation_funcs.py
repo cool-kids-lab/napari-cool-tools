@@ -138,8 +138,8 @@ def bscan_onnx_seg_func(
                     "trt_engine_cache_path": onnx_folder_path,
                     "trt_timing_cache_enable": True,  # True,
                     "trt_timing_cache_path": onnx_folder_path,
-                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                 },
             ),
             (
@@ -151,8 +151,8 @@ def bscan_onnx_seg_func(
                     "cudnn_conv_algo_search": "EXHAUSTIVE",
                     "do_copy_in_default_stream": True,
                     "cudnn_conv_use_max_workspace": "1",
-                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                 },
             ),
             "CPUExecutionProvider",
@@ -575,8 +575,8 @@ def bscan_onnx_deconj_func(
                     "trt_timing_cache_enable": True,  # True,
                     "trt_timing_cache_path": onnx_folder_path,
                     "trt_engine_hw_compatible": False,
-                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                     # "trt_profile_min_shapes": f"input:1x1x{target_shape[-2]}x{target_shape[-1]}",
                     # "trt_profile_opt_shapes": f"input:32x1x{target_shape[-2]}x{target_shape[-1]}",
                     # "trt_profile_max_shapes": f"input:32x1x{target_shape[-2]}x{target_shape[-1]}",
@@ -591,8 +591,8 @@ def bscan_onnx_deconj_func(
                     "cudnn_conv_algo_search": "EXHAUSTIVE",
                     "do_copy_in_default_stream": True,
                     "cudnn_conv_use_max_workspace": "1",
-                    # "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
+                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                 },
             ),
             "CPUExecutionProvider",

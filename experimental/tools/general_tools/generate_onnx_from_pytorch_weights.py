@@ -43,6 +43,8 @@ def generate_onnx_file(
     # onnx_model_path = Path(r"D:\JJ\Development\Yakub_Complex_Conjugate_Processing\U-net_resources\onnx")
     
     if model_type == MODELTYPE.ROPBSCANSEG:
+        print("\n\nI am here!!\n\n")
+        print(f"\n\nmodel = {MODELTYPE.ROPBSCANSEG.value}\n\n")
         config = rop_bscan_config
         current_lightning_model = MODELTYPE.ROPBSCANSEG.value.load_from_checkpoint(checkpoint_path=checkpoint_path,train_config=config,loss_metric=None,acc_metric=None)
     elif model_type == MODELTYPE.ROPVESSELSEG:
