@@ -82,3 +82,6 @@ cuda12 = { features = ["cuda12"] }
 cpu-dev = { features =  ["development","cpu"] }
 #cuda12-dev = { features = ["development", "cuda12"] }
 cuda12-dev = { features = ["development", "cuda12", "visualization"] }
+
+[environments.default]
+features = ["cuda12", "development", "visualization"]
