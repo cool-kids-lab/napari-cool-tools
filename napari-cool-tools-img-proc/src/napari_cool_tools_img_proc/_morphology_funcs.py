@@ -55,7 +55,7 @@ def morphological_dilation(
             ]
         ).to(proc)
 
-    print(f"data_t shape: {data_t.shape}\n")
+    #print(f"data_t shape: {data_t.shape}\n")
 
     if (data_t.ndim == 1 or volumetric_calc) and not use_gpu:
         out_data_t = morph.dilation(data_t, kernel).squeeze()
@@ -118,7 +118,7 @@ def morphological_erosion(
             ]
         )
 
-    print(f"data_t shape: {data_t.shape}\n")
+    #print(f"data_t shape: {data_t.shape}\n")
 
     if data_t.ndim == 1 or volumetric_calc:
         out_data_t = morph.erosion(data_t, kernel).squeeze()

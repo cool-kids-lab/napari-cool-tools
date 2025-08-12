@@ -130,7 +130,7 @@ def cartify(
         # data = data[::ds, ::ds, ::ds]
 
     thetax, r, thetay = data.shape
-    r_pad = int(round(r * 1.66)) # what is the constant 1.66 is this distance to the pivot point?
+    r_pad = int(round(r * 1.66)) # 1.66 magic number?
     zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
         data,
@@ -395,7 +395,7 @@ def generate_fast_curve_correction(
 
     if display_in_napari:
         # viewer.add_image(cart,name="uncle_ben-s_curve_correction")
-        viewer.add_image(cart, name="uncle_ben-s_curve_correction")
+        viewer.add_image(cart, name="curve_correction")
         # viewer.add_labels(cart,name="uncle_ben-s_curve_correction")
         viewer.show()
         napari.run()

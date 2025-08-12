@@ -140,12 +140,17 @@ def _on_init(widget):
         input_image = viewer.layers[widget.input_vol.current_choice]
         cartify_function(
             input_image,
-            widget.scan_angle.value,
-            widget.ds.value,
-            widget.res.value,
-            widget.threshold.value,
-            widget.chunk_size.value,
-            widget.circleCrop.value,
+            scan_angle=widget.scan_angle.value,
+            refractive_index=widget.refractive_index.value,
+            pivot_point=widget.pivot_point.value,
+            imaging_range=widget.imaging_range.value,
+            ref_motor_location=widget.ref_motor_location.value,
+            img_motor_location=widget.img_motor_location.value,
+            downsample_multiplier=widget.downsample_multiplier.value,
+            resolution=widget.resolution.value,
+            threshold=widget.threshold.value,
+            chunk_size=widget.chunk_size.value,
+            circle_crop=widget.circle_crop.value,
         )
 
     @widget.vis_3d_button.clicked.connect
@@ -173,17 +178,17 @@ def _on_init(widget):
     call_button=False,
     widget_init=_on_init,
     curve_correct_button=dict(widget_type="PushButton", text="Curve_Correct"),
-    scan_angle=dict(widget_type="FloatSpinBox", value=102),
-    ref_indx=dict(widget_type="FloatSpinBox", value=1.0),
+    scan_angle=dict(widget_type="FloatSpinBox", value=105),
+    refractive_index=dict(widget_type="FloatSpinBox", value=1.0),
     imaging_range=dict(widget_type="FloatSpinBox", value=6.0),
     pivot_point=dict(widget_type="FloatSpinBox", value=19.0),
-    ref_motor_loc=dict(widget_type="FloatSpinBox", value=0.0),
-    img_motor_loc=dict(widget_type="FloatSpinBox", value=0.0),
-    ds=dict(widget_type="SpinBox", value=1),
-    res=dict(widget_type="FloatSpinBox", value=1 / 6),
+    ref_motor_location=dict(widget_type="FloatSpinBox", value=0.0),
+    img_motor_location=dict(widget_type="FloatSpinBox", value=0.0),
+    downsample_multiplier=dict(widget_type="SpinBox", value=1),
+    resolution=dict(widget_type="FloatSpinBox", value=1.0), #value=1 / 6),
     threshold=dict(widget_type="SpinBox", value=5),
     chunk_size=dict(widget_type="SpinBox", value=16),
-    circleCrop=dict(widget_type="SpinBox", value=1),
+    circle_crop=dict(widget_type="SpinBox", value=1),
     vol_threshold=dict(widget_type="FloatSpinBox", value=1.0),
     vol_opac=dict(widget_type="FloatSpinBox", value=0.5),
     isovalue=dict(widget_type="FloatSpinBox", value=5),
@@ -194,16 +199,16 @@ def _on_init(widget):
 def cartify(
     input_vol: Image,
     scan_angle,
-    ref_indx,
+    refractive_index,
     imaging_range,
     pivot_point,
-    ref_motor_loc,
-    img_motor_loc,
-    ds,
-    res,
+    ref_motor_location,
+    img_motor_location,
+    downsample_multiplier,
+    resolution,
     threshold,
     chunk_size,
-    circleCrop,
+    circle_crop,
     curve_correct_button,
     input_vol_3d: Image,
     vol_threshold,
@@ -222,18 +227,43 @@ def cartify(
 
 
 @thread_worker(connect={"returned": viewer.add_layer})
-# def cartify_function(input_image: Image, sweep=102, ds=1, res=1/6, threshold=5, chunk_size=16, circleCrop = 1):
+# def cartify_function(input_image: Image, scan_angle=102, downsample_multiplier=1, res=1/6, threshold=5, chunk_size=16, circle_crop = 1):
 def cartify_function(
-    input_image: Image, sweep, ds, res, threshold, chunk_size, circleCrop
+    input_image: Image, scan_angle=105, refractive_index=1.0, imaging_range=6.0, pivot_point= 19.0, ref_motor_location=0.0, img_motor_location=0.0, downsample_multiplier=1, resolution=1.0, threshold=5, chunk_size=16, circle_crop=1
 ):
     log_time("Starting cartify function")
     data = input_image.data
     log_time("Data loaded. Shape is:")
-    if ds > 1:
-        data = block_reduce(data, block_size=(ds, ds, ds), func=np.mean)
+    if downsample_multiplier > 1:
+        data = block_reduce(data, block_size=(downsample_multiplier, downsample_multiplier, downsample_multiplier), func=np.mean)
 
     thetax, r, thetay = data.shape
-    r_pad = int(round(r * 1.66))
+
+    # temp add from Yakub code
+
+    imaging_range = imaging_range / refractive_index
+
+    pixel_spacing = imaging_range / data.shape[1]
+
+    reference_arm_shift = ref_motor_location - img_motor_location
+
+    reference_arm_shift = (
+        reference_arm_shift * 0.5 / refractive_index
+    )
+
+    padding = pivot_point - imaging_range + reference_arm_shift
+
+    padding_pixel = int(padding / pixel_spacing)
+
+
+
+    print(f"imaging_range:\n{imaging_range}\npixel_spacing:\n{pixel_spacing}\nreference_arm_shift:\n{reference_arm_shift}\n")
+
+    #r_pad = int(round(r * 1.66))
+    r_pad = int(round(r * 2))
+
+    r_pad = int(round(r) + padding_pixel)
+
     zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
         data,
@@ -247,7 +277,7 @@ def cartify_function(
 
     # Compute center and radius
     thx_center, thy_center = thetax // 2, thetay // 2
-    radius = (min(thetax, thetay) // 2) * circleCrop
+    radius = (min(thetax, thetay) // 2) * circle_crop
 
     # Create a meshgrid of coordinates
     thx_m = np.arange(thetax) - thx_center
@@ -263,7 +293,7 @@ def cartify_function(
     data[data < threshold] = 0  # Apply threshold
 
     num_r, num_thx, num_thy = data.shape
-    angle = sweep * np.pi / 180
+    angle = scan_angle * np.pi / 180
 
     r = cp.linspace(0, num_r, num_r)
     thx = cp.linspace(-angle / 2, angle / 2, num_thx)
@@ -272,8 +302,8 @@ def cartify_function(
     x_dim = y_dim = int(num_r * np.sin(angle / 2))
     z_dim = int(num_r)
 
-    x_res = y_res = int(x_dim * res * 2)
-    z_res = int(z_dim * res)
+    x_res = y_res = int(x_dim * resolution * 2)
+    z_res = int(z_dim * resolution)
     x = cp.linspace(-x_dim, x_dim, x_res)
     y = cp.linspace(-y_dim, y_dim, y_res)
     z = cp.linspace(0, z_dim, z_res)
@@ -287,7 +317,7 @@ def cartify_function(
 
     log_time("Warping to Cartesian coordinates")
     cart_image = spherical2cartesian_chunked(
-        r, thx, thy, data, x, y, z, sweep, chunk_size=chunk_size
+        r, thx, thy, data, x, y, z, scan_angle, chunk_size=chunk_size
     )
     log_time("Completed warping to Cartesian coordinates.")
 
