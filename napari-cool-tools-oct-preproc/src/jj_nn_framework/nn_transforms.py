@@ -69,9 +69,9 @@ class ResizeToFit(nn.Module):
         x = t[0]
         l = list(t)
 
-        if x.shape[-2] > self.target_shape[-2] or x.shape[-1] > self.target_shape[-1]:
-            x = TF.resize(x, self.target_shape)
-            l[0] = x
+        #if x.shape[-2] > self.target_shape[-2] or x.shape[-1] > self.target_shape[-1]:
+        x = TF.resize(x, self.target_shape)
+        l[0] = x
 
         return tuple(l)
 

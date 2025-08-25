@@ -26,6 +26,9 @@ contributions:
     - id: napari-cool-tools-oct-preproc.resize_image
       title: Annotation Preprocessing
       python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:resize_image_plugin
+    - id: napari-cool-tools-oct-preproc.shift_label
+      title: Shift Label
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:shift_label_plugin
   widgets:
     - command: napari-cool-tools-oct-preproc.preproc_bscan
       display_name: Preprocess Bscan
@@ -50,4 +53,7 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-oct-preproc.resize_image
       display_name: Resize Image
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.shift_label
+      display_name: Shift Label
       autogenerate: true

@@ -38,7 +38,7 @@ REM Creating shortcut to Desktop
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$desktop = [Environment]::GetFolderPath('Desktop');" ^
     "$shortcut = (New-Object -COM WScript.Shell).CreateShortcut($desktop + '\Launch Napari Cool Tools.lnk');" ^
-    "$shortcut.TargetPath = '%CD%\launch_cool-tools.bat';" ^
+    "$shortcut.TargetPath = '%CD%\launch_cool-tools_pixi.bat';" ^
     "$shortcut.WorkingDirectory = '%CD%';" ^
     "$shortcut.WindowStyle = 1;" ^
     "$shortcut.IconLocation = '%CD%\napari.ico';" ^

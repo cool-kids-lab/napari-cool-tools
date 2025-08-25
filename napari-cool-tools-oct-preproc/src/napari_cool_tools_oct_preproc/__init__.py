@@ -22,3 +22,4 @@ class OCTACalc(Enum):
     STD = "Standard Deviation"
     VAR = "Variance"
     VAR2 = "Variance Squared"
+    ADA = "Adaptive Decorrelation"

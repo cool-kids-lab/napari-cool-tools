@@ -769,11 +769,15 @@ def generate_octa(
 
     # outputs = []
 
+    import numpy as np
+
     if mscans < 2:
         raise RuntimeError("OCTA processing requires at least 2 M-scans to function")
 
     new_shape = (-1, mscans, data.shape[-2], data.shape[-1])
+    print(data.shape)
     m_comp = data.reshape(new_shape)
+    print(m_comp.shape)
 
     if calc == OCTACalc.STD:
         out_data = m_comp.std(axis=1)
@@ -781,6 +785,21 @@ def generate_octa(
         out_data = m_comp.var(axis=1)
         if calc == OCTACalc.VAR2:
             out_data = out_data**2
+
+    elif calc == OCTACalc.ADA :
+        #amplitude decorrelation        
+        out_data = np.zeros((m_comp.shape[0],m_comp.shape[-2],m_comp.shape[-1]))
+        for idx,pair in enumerate(m_comp):
+            for ii in range(0,mscans-1):
+                frameA = pair[ii]
+                frameB = pair[ii+1]
+
+                ada = 1 - (frameA * frameB) / (0.5*frameA**2 + 0.5*frameB**2)
+                out_data[idx] = out_data[idx]+ada
+
+            #average ada
+            out_data[idx] = out_data[idx]/(mscans-1)
+
     else:
         raise RuntimeError(
             f"{calc} is an invalid calculation mode and has not been implemented"

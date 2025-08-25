@@ -6,7 +6,7 @@ from typing import Generator, List
 
 import skimage
 import skimage.transform
-from napari.layers import Image, Layer
+from napari.layers import Image, Layer, Labels
 from napari.qt.threading import thread_worker
 from napari.types import ImageData
 from napari.utils.notifications import show_info
@@ -90,6 +90,19 @@ def resize_image_thread(
 
     else:
         show_info("Resizing image thread Failed, Must be a volume!!!")
+
+def shift_label_plugin(
+        label : Labels,
+        shift: int  = 0,
+        axis: int = 1,
+        up_direction: bool = True,
+):
+    import numpy as np
+
+    val = -1 if up_direction else 1
+    
+    dd = np.roll(label.data,shift=shift*val,axis=axis)
+    viewer.add_labels(dd,name=label.name+"_shifted")
 
 
 def generate_enface_plugin(
