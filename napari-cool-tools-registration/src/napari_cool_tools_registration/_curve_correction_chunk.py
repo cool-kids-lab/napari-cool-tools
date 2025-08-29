@@ -260,7 +260,7 @@ def cartify_function(
     print(f"imaging_range:\n{imaging_range}\npixel_spacing:\n{pixel_spacing}\nreference_arm_shift:\n{reference_arm_shift}\n")
 
     #r_pad = int(round(r * 1.66))
-    r_pad = int(round(r * 2))
+    #r_pad = int(round(r * 2))
 
     r_pad = int(round(r) + padding_pixel)
 

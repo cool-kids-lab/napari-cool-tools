@@ -114,23 +114,59 @@ def spherical2cartesian_chunked(
 # def cartify(file, sweep=102, ds=1, res=1/6, threshold=5, chunk_size=16, save = False, circleCrop = 1):
 def cartify(
     data: np.ndarray,
-    sweep=102,
+    #sweep=105,
+    angle=105,
+    refractive_index=1.0, #1.33
+    imaging_range=6.0, #12.0
+    pivot_point= 19.0,
+    ref_motor_location=0.0,
+    img_motor_location=0.0,
     ds=1, #downsample factor
+    down_sample_factor = 0.5,
     res=1 / 6, # resolution
     threshold=5,
-    chunk_size=16,
+    chunk_size=8, #16,
     save=False,
     circleCrop=1,
 ):
     log_time("Starting cartify function")
     # data = np.load(file)
     log_time("Data loaded. Shape is:")
+
+    
+    print(f"initial shape: {data.shape}\n")
+
+    #block_size = (data.shape[0]//int(data.shape[0]*down_sample_factor),data.shape[1]//int(data.shape[1]*down_sample_factor),data.shape[2]//int(data.shape[2]*down_sample_factor))
     if ds > 1:
+    #if ds:
         data = block_reduce(data, block_size=(ds, ds, ds), func=np.mean)
+        #data = block_reduce(data, block_size=block_size, func=np.mean)
         # data = data[::ds, ::ds, ::ds]
 
+    print(f"downsampled shape: {data.shape}\n")
+
     thetax, r, thetay = data.shape
-    r_pad = int(round(r * 1.66)) # 1.66 magic number?
+
+    imaging_range = imaging_range / refractive_index
+
+    pixel_spacing = imaging_range / data.shape[1]
+
+    reference_arm_shift = (ref_motor_location - img_motor_location) / 1000 #convert micrometers to milimeters
+
+    reference_arm_shift = (
+        reference_arm_shift * 0.5 / refractive_index
+    )
+
+    #pivot_point = pivot_point - imaging_range
+
+    padding = pivot_point - imaging_range + reference_arm_shift
+
+    padding_pixel = int(padding / pixel_spacing)
+
+
+    #r_pad = int(round(r * 1.66)) # 1.66 magic number?
+    r_pad = int(round(r) + padding_pixel)
+
     zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
         data,
@@ -159,14 +195,20 @@ def cartify(
     data[data < threshold] = 0  # Apply threshold
 
     num_r, num_thx, num_thy = data.shape
-    angle = sweep * np.pi / 180
+    #radians = sweep * (np.pi / 180) * 2
+    radians = angle * (np.pi / 180) * 2
 
     # Really not sure why its angle/4, but that's what works...
+    # Really not sure why its radians/4, but that's what works...
     r = cp.linspace(0, num_r, int(num_r))
-    thx = cp.linspace(-angle / 4, angle / 4, int(num_thx))
-    thy = cp.linspace(-angle / 4, angle / 4, int(num_thy))
+    thx = cp.linspace(-radians / 4, radians / 4, int(num_thx))
+    thy = cp.linspace(-radians / 4, radians / 4, int(num_thy))
+    # thx = cp.linspace(-radians / 2, radians / 2, int(num_thx))
+    # thy = cp.linspace(-radians / 2, radians / 2, int(num_thy))
 
-    x_dim = y_dim = int(num_r * np.sin(angle / 2))
+    #x_dim = y_dim = int(num_r * np.sin(radians / 2))
+    x_dim = y_dim = int(num_r * np.sin(radians / 2))
+
     z_dim = int(num_r)
 
     x_res = y_res = int(num_r * res)
@@ -181,12 +223,13 @@ def cartify(
     dtype_size = cp.dtype(data.dtype).itemsize
     chunk_size = get_optimal_chunk_size(len(x), len(y), dtype_size, free_mem)
     print(f"optimal chunk size is: {chunk_size}")
-    chunk_size = 16 #32
+    chunk_size = 8 #16 #32
     print(f"using chunk size {chunk_size}")
 
     log_time("Warping to Cartesian coordinates")
     cart_image = spherical2cartesian_chunked(
-        r, thx, thy, data, x, y, z, sweep, order=1, chunk_size=chunk_size
+        #r, thx, thy, data, x, y, z, sweep, order=1, chunk_size=chunk_size
+        r, thx, thy, data, x, y, z, angle, order=1, chunk_size=chunk_size
     )
     log_time("Completed warping to Cartesian coordinates. Shape is:")
     print(cart_image.shape)
@@ -321,7 +364,7 @@ def numpy_to_pcd_format(data: np.ndarray, threshold=9):
     image_path={"label": "Image File", "mode": "r"},
     label_path={"label": "Label File", "mode": "r"},
     output_dir={"label": "Output Directory", "mode": "d"},
-    call_button="Uncle Ben's Fast Curve Corrector",
+    call_button="2 Fast 2 Curvious" #"Uncle Ben's Fast Curve Corrector",
 )
 def generate_fast_curve_correction(
     image_path: Path = Path(
@@ -332,13 +375,21 @@ def generate_fast_curve_correction(
     ),
     output_dir: Path = Path(r"D:\JJ\Projects\RT_Registration\Data\Test_Output"),
     output_filename: str = "output.pt",
-    sweep: int = 102,
+    #sweep: int = 105,
+    angle: int = 105,
+    refractive_index=1.0, #1.33
+    imaging_range=6.0, #12.0
+    pivot_point= 19.0,
+    ref_motor_location=0.0,
+    img_motor_location=0.0,
     downsampling: int = 1, #3,
+    down_sample_factor: float = 0.25, #0.5
     resolution: float = 1.0, #1 / 6,
-    threshold: int = 60, #15,  # 60
+    chunk_size: int = 8, #16
+    threshold: int = 0, #15,  # 60
     isovalue: int = 35,
     init_preproc: bool = False,
-    render_style: Literal["volume", "surface", "points","none"] = "volume",
+    render_style: Literal["volume", "surface", "points","none"] = "none", #"volume",
     display_in_napari: bool = True,
     save_pcd: bool = False,
     save_npy: bool = False,
@@ -373,9 +424,17 @@ def generate_fast_curve_correction(
     # cart = cartify(data=normalized_data,sweep=sweep,ds=downsampling,res=resolution,threshold=threshold,save=save)
     cart = cartify(
         data=preproc_data,
-        sweep=sweep,
+        #sweep=sweep,
+        angle=angle,
+        refractive_index=refractive_index,
+        imaging_range=imaging_range,
+        pivot_point=pivot_point,
+        ref_motor_location=ref_motor_location,
+        img_motor_location=img_motor_location,
         ds=downsampling,
+        down_sample_factor=down_sample_factor,
         res=resolution,
+        chunk_size=chunk_size,
         threshold=threshold,
         # save=save,
         save=False,
