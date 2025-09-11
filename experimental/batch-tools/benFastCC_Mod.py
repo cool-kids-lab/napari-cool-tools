@@ -160,12 +160,20 @@ def cartify(
     #pivot_point = pivot_point - imaging_range
 
     padding = pivot_point - imaging_range + reference_arm_shift
+    #padding = -5
+    #padding = pivot_point
+    #padding = 0
+    #padding = imaging_range - pivot_point + reference_arm_shift
 
     padding_pixel = int(padding / pixel_spacing)
+    #padding_pixel = abs(int(padding / pixel_spacing))
 
 
     #r_pad = int(round(r * 1.66)) # 1.66 magic number?
-    r_pad = int(round(r) + padding_pixel)
+    #r_pad = int(round(r) + padding_pixel)
+    r_pad = padding_pixel
+
+    print(f'r: {int(round(r))}, r_pad: {r_pad}, padding: {padding}, pixel_spacing: {pixel_spacing},padding_pixel: {padding_pixel}, \n')
 
     zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
@@ -196,6 +204,7 @@ def cartify(
 
     num_r, num_thx, num_thy = data.shape
     #radians = sweep * (np.pi / 180) * 2
+    #radians = angle * (np.pi / 180) #* 2
     radians = angle * (np.pi / 180) * 2
 
     # Really not sure why its angle/4, but that's what works...
@@ -212,7 +221,9 @@ def cartify(
     z_dim = int(num_r)
 
     x_res = y_res = int(num_r * res)
+    #x_res = y_res = int(num_r * res*2)
     z_res = int(z_dim * res / 2)
+    #z_res = int(z_dim * res ) #/ 2)
     x = cp.linspace(-x_dim, x_dim, x_res)
     y = cp.linspace(-y_dim, y_dim, y_res)
     z = cp.linspace(0, z_dim, z_res)
