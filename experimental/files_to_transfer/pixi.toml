@@ -49,9 +49,7 @@ qtreload = "==0.2.3"
 polars = "==1.31.*"
 imreg_dft = "==2.0.0"
 napari-cool-tools-dev = { path = "napari-cool-tools-dev", editable = true}
-jax = ">=0.4.30, <0.5"
-jaxkd = ">=0.1.2, <0.2"
-numpy-stl = ">=3.2.0, <3.3"
+#jax = ">=0.4.30, <0.5"
 
 connected-components-3d = "*"
 PolarTransform = "*"

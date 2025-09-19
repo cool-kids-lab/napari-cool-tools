@@ -9,14 +9,14 @@ import numpy as np
 import pyvista as pv
 from cupyx.scipy.ndimage import map_coordinates
 from magicgui import magicgui
-from napari_cool_tools_img_proc import DType
-from napari_cool_tools_img_proc._equalization_funcs import (
-    init_bscan_preproc,
-    normalize_data_in_range_func,
-)
-from napari_cool_tools_registration._registration_tools_funcs import (
-    a_scan_correction_func2,
-)
+# from napari_cool_tools_img_proc import DType
+# from napari_cool_tools_img_proc._equalization_funcs import (
+#     init_bscan_preproc,
+#     normalize_data_in_range_func,
+# )
+# from napari_cool_tools_registration._registration_tools_funcs import (
+#     a_scan_correction_func2,
+# )
 from pypcd4 import PointCloud
 from skimage.measure import block_reduce, marching_cubes
 from tqdm import tqdm
@@ -26,90 +26,142 @@ from tqdm import tqdm
 def log_time(message):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
 
-
 # Add timestamps to your functions
 def spherical2cartesian_chunked(
-    r, thx, thy, grid, x, y, z, sweep=140, order=3, chunk_size=64
+    r, thx, thy, grid, x, y, z, order=3, chunk_size=64
 ):
     # log_time("Starting spherical to Cartesian conversion")
 
     # Prepare the output array
     cartesian_shape = (len(x), len(y), len(z))
-    print(f"cartesian_shape: {cartesian_shape}\n")
     output = np.zeros(cartesian_shape, dtype=grid.dtype)
 
     # Iterate over chunks along the z-axis
     # for z_start in range(0, len(z), chunk_size):
     for z_start in tqdm(range(0, len(z), chunk_size), desc="Processing", unit="chunk"):
         z_end = min(z_start + chunk_size, len(z))
-        # log_time(f"Processing chunk: z[{z_start}:{z_end}]")
-        # log_time(f"% conversion processing: {round(100*z_end/len(z),1)}% ")
-        # Create the chunk-specific z-axis slice{
-        Z = z[z_start:z_end][None, None, :]  # Shape: (1, 1, z_chunk_size)
 
-        # Broadcast X and Y to match the chunk size
-        # X = x[:, None, None]  # Shape: (len(x), 1, 1)
-        # Y = y[None, :, None]  # Shape: (1, len(y), 1)
+        #this is similar with meshgrid but more memory efficient
+        Z = z[z_start:z_end][None, None, :]  # Shape: (1, 1, z_chunk_size)
         X = x[:, None, None].repeat(Z.shape[-1], axis=-1)  # Broadcast X
         Y = y[None, :, None].repeat(Z.shape[-1], axis=-1)
-
         X, Y, Z = cp.broadcast_arrays(X, Y, Z)
-        # Compute spherical coordinates for this chunk
-        new_r = cp.sqrt(X**2 + Y**2 + Z**2).astype(cp.float16)
-        new_thx = cp.arctan2(X, Z).astype(cp.float16)
-        new_thy = cp.arctan2(Y, Z).astype(cp.float16)
+
+        # Compute scan coordinates for this chunk
+        new_r = cp.sqrt(X**2 + Y**2 + Z**2).astype(cp.float32)
+        new_thx = cp.arctan2(X, Z).astype(cp.float32)
+        new_thy = cp.arctan2(Y, Z).astype(cp.float32)
 
         # Interpolate on GPU
-        new_ir = cp.interp(new_r.ravel(), r, cp.arange(len(r)))
+        new_ir = cp.interp(new_r.ravel(), r, cp.arange(len(r)), left=len(r)+1, right=len(r)+1)
         new_ithx = cp.interp(
-            new_thx.ravel(), thx, cp.arange(len(thx)), period=2 * np.pi
+            new_thx.ravel(), thx, cp.arange(len(thx)), left=len(thx)+1, right=len(thx)+1
         )
         new_ithy = cp.interp(
-            new_thy.ravel(), thy, cp.arange(len(thy)), period=2 * np.pi
+            new_thy.ravel(), thy, cp.arange(len(thy)), left=len(thy)+1, right=len(thy)+1
         )
 
-        # Compute valid indices for this chunk
-        valid_mask = (new_r.ravel() <= r.max()) & (new_r.ravel() >= r.min())
-        valid_mask &= (new_thx.ravel() <= thx.max()) & (new_thx.ravel() >= thx.min())
-        valid_mask &= (new_thy.ravel() <= thy.max()) & (new_thy.ravel() >= thy.min())
+        # Map coordinates in the local grid slice
+        valid_points = cp.array([new_ir, new_ithx, new_ithy])
+        interpolated = map_coordinates(cp.asarray(grid), valid_points, 
+                                        order=order, mode="constant",
+                                        cval=0.0)
+        
+        output[:, :, z_start:z_end] = interpolated.get().reshape(new_r.shape)
 
-        if valid_mask.any():
-            # Get the bounding indices for the valid region
-            r_min, r_max = (
-                int(new_ir[valid_mask].min()),
-                int(new_ir[valid_mask].max()) + 1,
-            )
-            thx_min, thx_max = (
-                int(new_ithx[valid_mask].min()),
-                int(new_ithx[valid_mask].max()) + 1,
-            )
-            thy_min, thy_max = (
-                int(new_ithy[valid_mask].min()),
-                int(new_ithy[valid_mask].max()) + 1,
-            )
-
-            # Slice the grid to the valid region
-            grid_slice = cp.asarray(grid[r_min:r_max, thx_min:thx_max, thy_min:thy_max])
-            # Adjust indices to fit within the local grid slice
-            local_ir = new_ir[valid_mask] - r_min
-            local_ithx = new_ithx[valid_mask] - thx_min
-            local_ithy = new_ithy[valid_mask] - thy_min
-
-            # Map coordinates in the local grid slice
-            valid_points = cp.array([local_ir, local_ithx, local_ithy])
-            interpolated = map_coordinates(grid_slice, valid_points, order=order)
-
-            # Place interpolated values in the output array for this chunk
-            interpolated_chunk = cp.zeros_like(new_r.ravel(), dtype=grid.dtype)
-            interpolated_chunk[valid_mask] = interpolated
-            output[:, :, z_start:z_end] = interpolated_chunk.get().reshape(new_r.shape)
-        # del X_chunk, Y_chunk, Z_chunk, new_r, new_th, new_phi
-        cp.get_default_memory_pool().free_all_blocks()
-        gc.collect()
         del X, Y, Z, new_r, new_thx, new_thy
 
     log_time("Completed spherical to Cartesian conversion")
     return output
+
+# # Add timestamps to your functions
+# def spherical2cartesian_chunked(
+#     r, thx, thy, grid, x, y, z, sweep=140, order=3, chunk_size=64
+# ):
+#     # log_time("Starting spherical to Cartesian conversion")
+
+#     # Prepare the output array
+#     cartesian_shape = (len(x), len(y), len(z))
+#     output = np.zeros(cartesian_shape, dtype=grid.dtype)
+
+#     # Iterate over chunks along the z-axis
+#     # for z_start in range(0, len(z), chunk_size):
+#     for z_start in tqdm(range(0, len(z), chunk_size), desc="Processing", unit="chunk"):
+#         z_end = z_start + chunk_size
+
+#         #convert at Z chunk
+#         Z = z[z_start:z_end][None, None, :]  # Shape: (1, 1, z_chunk_size)
+#         X = x[:, None, None].repeat(Z.shape[-1], axis=-1)  # Broadcast X
+#         Y = y[None, :, None].repeat(Z.shape[-1], axis=-1)
+
+#         #this is used for safety to make sure that they can be mathematically summed
+#         X, Y, Z = cp.broadcast_arrays(X, Y, Z)
+
+#         # Compute spherical coordinates for this chunk
+#         new_r = cp.sqrt(X**2 + Y**2 + Z**2).astype(cp.float32)
+#         new_thx = cp.arctan2(X, Z).astype(cp.float32)
+#         new_thy = cp.arctan2(Y, Z).astype(cp.float32)
+
+
+#         #this will create a rectangular crop instead of a circular one
+#         # Interpolate on GPU
+
+#         new_ir = cp.interp(new_r.ravel(), r, cp.arange(len(r)), left=len(r) + 1, right=len(r) + 1)
+#         new_ithx = cp.interp(
+#             new_thx.ravel(), thx, cp.arange(len(thx)), left=len(thx) + 1, right=len(thx) + 1
+#         )
+#         new_ithy = cp.interp(
+#             new_thy.ravel(), thy, cp.arange(len(thy)), left=len(thy) + 1, right=len(thy) + 1
+#         )
+
+#         valid_points = cp.array([new_ir, new_ithx, new_ithy])
+#         interpolated = map_coordinates(cp.asarray(grid), valid_points, order=3, mode="constant", cval=0.0)
+#         output[:, :, z_start:z_end] = interpolated.get().reshape(new_r.shape)
+
+#         # # Compute valid indices for this chunk
+#         # valid_mask = (new_r.ravel() <= r.max()) & (new_r.ravel() >= r.min())
+#         # valid_mask &= (new_thx.ravel() <= thx.max()) & (new_thx.ravel() >= thx.min())
+#         # valid_mask &= (new_thy.ravel() <= thy.max()) & (new_thy.ravel() >= thy.min())
+
+#         # if valid_mask.any():
+#         #     # Get the bounding indices for the valid region
+#         #     r_min, r_max = (
+#         #         int(new_ir[valid_mask].min()),
+#         #         int(new_ir[valid_mask].max()) + 1,
+#         #     )
+#         #     thx_min, thx_max = (
+#         #         int(new_ithx[valid_mask].min()),
+#         #         int(new_ithx[valid_mask].max()) + 1,
+#         #     )
+#         #     thy_min, thy_max = (
+#         #         int(new_ithy[valid_mask].min()),
+#         #         int(new_ithy[valid_mask].max()) + 1,
+#         #     )
+
+#             # Slice the grid to the valid region
+#             # grid_slice = cp.asarray(grid[r_min:r_max, thx_min:thx_max, thy_min:thy_max])
+#             # # Adjust indices to fit within the local grid slice
+#             # local_ir = new_ir[valid_mask] - r_min
+#             # local_ithx = new_ithx[valid_mask] - thx_min
+#             # local_ithy = new_ithy[valid_mask] - thy_min
+
+#             # Map coordinates in the local grid slice
+#             # valid_points = cp.array([local_ir, local_ithx, local_ithy])
+#             # interpolated = map_coordinates(grid_slice, valid_points, order=order)
+
+#             # Place interpolated values in the output array for this chunk
+#             # interpolated_chunk = cp.zeros_like(new_r.ravel(), dtype=grid.dtype)
+#             # interpolated_chunk[valid_mask] = interpolated
+#             # output[:, :, z_start:z_end] = interpolated_chunk.get().reshape(new_r.shape)
+
+
+#         # del X_chunk, Y_chunk, Z_chunk, new_r, new_th, new_phi
+#         # cp.get_default_memory_pool().free_all_blocks()
+#         # gc.collect()
+#         # del X, Y, Z, new_r, new_thx, new_thy
+
+#     log_time("Completed spherical to Cartesian conversion")
+#     return output
 
 
 # def cartify(file, sweep=102, ds=1, res=1/6, threshold=5, chunk_size=16, save = False, circleCrop = 1):
@@ -117,15 +169,15 @@ def cartify(
     data: np.ndarray,
     #sweep=105,
     angle=105,
-    refractive_index=1.0, #1.33
-    imaging_range=6.0, #12.0
+    refractive_index=1.33, #1.33
+    imaging_range=12.0,
     pivot_point= 19.0,
-    ref_motor_location=0.0,
-    img_motor_location=0.0,
-    ds=1, #downsample factor
-    down_sample_factor = 0.5,
-    res=1 / 6, # resolution
-    threshold=5,
+    ref_motor_location=85.0,
+    img_motor_location=79.4,
+    ds=0, #downsample factor
+    down_sample_factor = 1.0,
+    res=1.0, #1 / 6, # resolution
+    threshold=0,
     chunk_size=8, #16,
     save=False,
     circleCrop=1,
@@ -137,13 +189,14 @@ def cartify(
     
     print(f"initial shape: {data.shape}\n")
 
-    print(f"ds:{ds}\n")
-    #block_size = (data.shape[0]//int(data.shape[0]*down_sample_factor),data.shape[1]//int(data.shape[1]*down_sample_factor),data.shape[2]//int(data.shape[2]*down_sample_factor))
-    if ds > 1:
-    #if ds:
-        data = block_reduce(data, block_size=(ds, ds, ds), func=np.mean)
-        #data = block_reduce(data, block_size=block_size, func=np.mean)
-        # data = data[::ds, ::ds, ::ds]
+    #initial shape is [x, r, y]
+
+    # #block_size = (data.shape[0]//int(data.shape[0]*down_sample_factor),data.shape[1]//int(data.shape[1]*down_sample_factor),data.shape[2]//int(data.shape[2]*down_sample_factor))
+    # if ds > 1:
+    # #if ds:
+    #     data = block_reduce(data, block_size=(ds, ds, ds), func=np.mean)
+    #     #data = block_reduce(data, block_size=block_size, func=np.mean)
+    #     # data = data[::ds, ::ds, ::ds]
 
     print(f"downsampled shape: {data.shape}\n")
 
@@ -153,48 +206,36 @@ def cartify(
 
     pixel_spacing = imaging_range / data.shape[1]
 
-    #reference_arm_shift = (ref_motor_location - img_motor_location) / 1000 #convert micrometers to milimeters
-    reference_arm_shift = (ref_motor_location - img_motor_location) #/ 1000 #convert micrometers to milimeters
+    reference_arm_shift = (ref_motor_location - img_motor_location) #convert micrometers to milimeters
+    
+    #reference_arm_shift = 0
 
     reference_arm_shift = (
         reference_arm_shift * 0.5 / refractive_index
     )
 
-    #pivot_point = pivot_point - imaging_range
-
     padding = pivot_point - imaging_range + reference_arm_shift
-    #padding = -5
-    #padding = pivot_point
-    #padding = 0
-    #padding = imaging_range - pivot_point + reference_arm_shift
 
     padding_pixel = int(padding / pixel_spacing)
-    #padding_pixel = abs(int(padding / pixel_spacing))
 
+    print(f"imaging range in pixels: {data.shape[1]}, padding: {padding}, pixel_spacing: {pixel_spacing}, padding_pixel: {padding_pixel}\n")
 
-    #r_pad = int(round(r * 1.66)) # 1.66 magic number?
-    #r_pad = int(round(r) + padding_pixel)
-    r_pad = padding_pixel
-
-    #print(f"r: {int(round(r))}, r_pad: {r_pad}, padding: {padding}, pixel_spacing: {pixel_spacing},padding_pixel: {padding_pixel}\n")
-    print(f"imaging range in pixels: {data.shape[1]}, r_pad: {r_pad}, padding: {padding}, pixel_spacing: {pixel_spacing}, padding_pixel: {padding_pixel}\n")
-   
-
-    zeros_array_dimensions = (thetax, r_pad, thetay)
     data = np.pad(
         data,
-        ((0, 0), (zeros_array_dimensions[1], 0), (0, 0)),
+        ((0, 0), (padding_pixel, 0), (0, 0)),
         mode="constant",
         constant_values=0,
     )
 
     print(f"padded data shape: {data.shape}\n")
+
     data = data.transpose((1, 0, 2))
+
     print(f"padded data tansposed shape: {data.shape}\n")
-    ################## !!!!!!!!!!! data  = (data * 255).astype(np.uint8)
+
     # Compute center and radius
     thx_center, thy_center = thetax // 2, thetay // 2
-    radius = (min(thetax, thetay) // 2) * circleCrop
+    radius = (min(thetax, thetay) // 2)
 
     # Create a meshgrid of coordinates
     thx_m = np.arange(thetax) - thx_center
@@ -207,64 +248,60 @@ def cartify(
 
     # Apply the mask across all z-slices
     data[:, ~circular_mask] = 0  # Values outside the circle are set to 0
-    data[data < threshold] = 0  # Apply threshold
 
     num_r, num_thx, num_thy = data.shape
-    #radians = sweep * (np.pi / 180) * 2
-    #radians = angle * (np.pi / 180) #* 2
-    radians = angle * (np.pi / 180) * 2
+    radians = angle * (np.pi / 180)
 
-    # Really not sure why its angle/4, but that's what works...
-    # Really not sure why its radians/4, but that's what works...
     r = cp.linspace(0, num_r, int(num_r))
-    thx = cp.linspace(-radians / 4, radians / 4, int(num_thx))
-    thy = cp.linspace(-radians / 4, radians / 4, int(num_thy))
-    # thx = cp.linspace(-radians / 2, radians / 2, int(num_thx))
-    # thy = cp.linspace(-radians / 2, radians / 2, int(num_thy))
+    thx = cp.linspace(-radians/2, radians/2 , num_thx)
+    thy = cp.linspace(-radians/2, radians/2, num_thy)
 
-    #x_dim = y_dim = int(num_r * np.sin(radians / 2))
-    x_dim = y_dim = int(num_r * np.sin(radians / 2))
 
-    z_dim = int(num_r)
+    x_dim = num_r * np.sin(radians / 2)
+    y_dim = num_r * np.sin(radians / 2)
+    z_dim = num_r
 
-    x_res = y_res = int(num_r * res)
-    # x_res = int(num_r * res)
-    # y_res = int(num_r * (thetay/thetax))
-    #x_res = y_res = int(num_r * res*2)
-    z_res = int(z_dim * res / 2)
-    #z_res = int(z_dim * res ) #/ 2)
+    x_res = int(x_dim * 2) #output resolution
+    y_res = int(y_dim * 2)
+    z_res = int(z_dim * 1)
+
+    #this is the target output grid
     x = cp.linspace(-x_dim, x_dim, x_res)
     y = cp.linspace(-y_dim, y_dim, y_res)
     z = cp.linspace(0, z_dim, z_res)
 
-    print(f"reference arm shift: {reference_arm_shift}\nradius with padding shape: {data.shape[1]}\nresolution: {res}\nx_res,y_res,z_res: {x_res,y_res,z_res}")
-    print(f"x,y,z dims: {x_dim,y_dim,z_dim}\nlen x,y,z,dims: {len(x),len(y),len(z)}\n")
-    print(f"spherical2cartesian parameters (r,thx,thy,x,y,z,angle)\n({(r.min,r.max),(thx.min(),thx.max()),(thy.min(),thy.max()),(x.min(),x.max()),(y.min(),y.max()),(z.min(),z.max()),angle})\n")
+    # print(f"output shape will be: {x_res},{y_res},{z_res}\n")
 
-    # Determine optimal chunk size
-    log_time("Calculating optimal chunk size")
-    free_mem, total_mem = cp.cuda.Device(0).mem_info
-    dtype_size = cp.dtype(data.dtype).itemsize
-    chunk_size = get_optimal_chunk_size(len(x), len(y), dtype_size, free_mem)
-    print(f"optimal chunk size is: {chunk_size}")
+    # # Determine optimal chunk size
+    # log_time("Calculating optimal chunk size")
+    # free_mem, total_mem = cp.cuda.Device(0).mem_info
+    # dtype_size = cp.dtype(data.dtype).itemsize
+    # chunk_size = get_optimal_chunk_size(len(x), len(y), dtype_size, free_mem)
+    # print(f"optimal chunk size is: {chunk_size}")
     chunk_size = 8 #16 #32
     print(f"using chunk size {chunk_size}")
 
     log_time("Warping to Cartesian coordinates")
+
+    # cart_image = spherical2cartesian_chunked(
+    #     r, thx, thy, data, x, y, z, order=3, chunk_size=64
+    # )
+
     cart_image = spherical2cartesian_chunked(
         #r, thx, thy, data, x, y, z, sweep, order=1, chunk_size=chunk_size
-        r, thx, thy, data, x, y, z, angle, order=1, chunk_size=chunk_size
+        r, thx, thy, data, x, y, z, order=3, chunk_size=chunk_size
     )
-    log_time("Completed warping to Cartesian coordinates. Shape is:")
-    print(cart_image.shape)
 
-    log_time("Cropping the Cartesian volume")
+    # log_time("Completed warping to Cartesian coordinates. Shape is:")
+    # print(cart_image.shape)
+
+    # log_time("Cropping the Cartesian volume")
     valid_mask = cart_image > 0
     z_min, z_max = np.where(valid_mask.any(axis=(0, 1)))[0][[0, -1]]
     y_min, y_max = np.where(valid_mask.any(axis=(0, 2)))[0][[0, -1]]
     x_min, x_max = np.where(valid_mask.any(axis=(1, 2)))[0][[0, -1]]
 
-    # Crop the volume
+    # # Crop the volume
     cart_image = cart_image[x_min : x_max + 1, y_min : y_max + 1, z_min : z_max + 1]
     # print(cart_image.max())
     # if save:
@@ -402,15 +439,15 @@ def generate_fast_curve_correction(
     output_filename: str = "output.pt",
     #sweep: int = 105,
     angle: int = 105,
-    refractive_index=1.33, #1.0
-    imaging_range=12.0, #6.0
+    refractive_index=1.0, #1.33
+    imaging_range=6.0, #12.0
     pivot_point= 19.0,
-    ref_motor_location=85.0, #0.0,
-    img_motor_location=79.4, #0.0,
-    downsampling: int = 0, #1, #3,
-    down_sample_factor: float = 0.0, #0.25, #0.5
+    ref_motor_location=0.0,
+    img_motor_location=0.0,
+    downsampling: int = 1, #3,
+    down_sample_factor: float = 0.25, #0.5
     resolution: float = 1.0, #1 / 6,
-    chunk_size: int = 4, #8, #16
+    chunk_size: int = 8, #16
     threshold: int = 0, #15,  # 60
     isovalue: int = 35,
     init_preproc: bool = False,
@@ -428,45 +465,51 @@ def generate_fast_curve_correction(
     image_name = viewer.layers[-1].name
     # normalized_data = normalize_data_in_range_func(image_data,0,255).astype(np.uint8)
 
-    if sin_correct:
-        image_data = a_scan_correction_func2(image_data)
+    # if sin_correct:
+    #     image_data = a_scan_correction_func2(image_data)
 
-    if init_preproc:
-        preproc_data = init_bscan_preproc(
-            image_data,
-            num_std=16,
-            min_intensity=0.0,
-            max_intensity=255.0,
-            dtype=DType.NP_UINT8,
-        )
-    else:
-        preproc_data = normalize_data_in_range_func(image_data,min_val=0.0,max_val=255.0).astype(np.uint8)
+    # if init_preproc:
+    #     preproc_data = init_bscan_preproc(
+    #         image_data,
+    #         num_std=16,
+    #         min_intensity=0.0,
+    #         max_intensity=255.0,
+    #         dtype=DType.NP_UINT8,
+    #     )
+    # else:
+    #     preproc_data = normalize_data_in_range_func(image_data,min_val=0.0,max_val=255.0).astype(np.uint8)
 
     print(type(image_data), image_data.shape)
     # del viewer
     # gc.collect()
 
     # cart = cartify(data=normalized_data,sweep=sweep,ds=downsampling,res=resolution,threshold=threshold,save=save)
-    cart = cartify(
-        data=preproc_data,
-        #sweep=sweep,
-        angle=angle,
-        refractive_index=refractive_index,
-        imaging_range=imaging_range,
-        pivot_point=pivot_point,
-        ref_motor_location=ref_motor_location,
-        img_motor_location=img_motor_location,
-        ds=downsampling,
-        down_sample_factor=down_sample_factor,
-        res=resolution,
-        chunk_size=chunk_size,
-        threshold=threshold,
-        # save=save,
-        save=False,
-    )
+    # cart = cartify(
+    #     data=image_data,
+    #     #sweep=sweep,
+    #     angle=angle,
+    #     refractive_index=refractive_index,
+    #     imaging_range=imaging_range,
+    #     pivot_point=pivot_point,
+    #     ref_motor_location=ref_motor_location,
+    #     img_motor_location=img_motor_location,
+    #     ds=downsampling,
+    #     down_sample_factor=down_sample_factor,
+    #     res=resolution,
+    #     chunk_size=chunk_size,
+    #     threshold=threshold,
+    #     # save=save,
+    #     save=False,
+    # )
 
-    # orient for proper viewing in Napari
+
+    #image_data = image_data[:, ::-1, :]  # flip the B-scan data to correct orientation
+    cart = cartify(data = image_data)
+
+    # # orient for proper viewing in Napari
     cart = cart.transpose(0,2,1)
+
+    # cart = image_data
 
     print(f"print cartesian stats: {type(cart)}, {cart.dtype},{cart.shape}\n")
 
@@ -484,16 +527,16 @@ def generate_fast_curve_correction(
         viewer.show()
         napari.run()
 
-    if save_pcd:
-        pcd_numpy_data = numpy_to_pcd_format(data=cart, threshold=threshold)
-        pointcloud = PointCloud.from_xyzi_points(pcd_numpy_data)
-        output_file_path = output_dir / f"{image_name}.pcd"
-        pointcloud.save(output_file_path)
+    # if save_pcd:
+    #     pcd_numpy_data = numpy_to_pcd_format(data=cart, threshold=threshold)
+    #     pointcloud = PointCloud.from_xyzi_points(pcd_numpy_data)
+    #     output_file_path = output_dir / f"{image_name}.pcd"
+    #     pointcloud.save(output_file_path)
 
-    if save_npy:
-        log_time("Saving file")
-        output_file_path = output_dir / f"{image_name}.npy"
-        np.save(output_file_path, cart)
+    # if save_npy:
+    #     log_time("Saving file")
+    #     output_file_path = output_dir / f"{image_name}.npy"
+    #     np.save(output_file_path, cart)
 
 
 generate_fast_curve_correction.show(run=True)

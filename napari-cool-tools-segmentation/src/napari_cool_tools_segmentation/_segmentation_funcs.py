@@ -304,6 +304,7 @@ def enface_onnx_seg_func(
     DoG: bool = False,
     blur: bool = False,
     log_adjust: bool = False,
+    post_process: bool = True,
     output_preproc: bool = False,
     debug: bool = False,
 ) -> List[Layer]:
@@ -324,6 +325,8 @@ def enface_onnx_seg_func(
         pad_to_targetM_2d,
     )
     from jj_nn_framework.nn_transforms import DiffOfGausPred
+    from jj_nn_framework.skeletonize import Skeletonize
+    from napari_cool_tools_img_proc._morphology_funcs import morphological_erosion
     from kornia.enhance import adjust_log, equalize_clahe
     from kornia.filters import gaussian_blur2d
     from napari_cool_tools_io import device
@@ -421,16 +424,29 @@ def enface_onnx_seg_func(
     input_name = onnx_session.get_inputs()[0].name
 
     # TODO either retrain network with 3 channels or come up with new fix
-    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
-    # x_eq_cpu = x_eq_cpu[:,0,:,:]
-    # print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
-    # x_eq_cpu = x_eq_cpu[:,None,:,:]
+    print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    x_eq_cpu = x_eq_cpu[:,0,:,:]
+    print(f"x_eq_cpu shape {x_eq_cpu.shape}\n")
+    x_eq_cpu = x_eq_cpu[:,None,:,:]
 
     onnx_inputs = {input_name: x_eq_cpu}
     onnx_outs = onnx_session.run(None, onnx_inputs)
     onnx_out = onnx_outs[0].squeeze().astype(np.uint8)
 
     # seg_out = onnx_out.detach().cpu().numpy().squeeze().astype(int)
+
+    if post_process:
+        skele = Skeletonize()
+        skele.cuda()
+        skeletonized = skele(torch.tensor(onnx_out[None,None,:,:],dtype=torch.float32,device="cuda")).detach().cpu().squeeze().numpy().astype(bool)
+        dilation_rounds = 2
+        dilated = onnx_out
+
+        for i in range(dilation_rounds):
+            #dilated = morphological_erosion(onnx_out).astype(bool)
+            dilated = morphological_erosion(dilated).astype(bool)
+
+        onnx_out = skeletonized + dilated
 
     if pad_flag:
         final_seg = onnx_out[start_0:end_0, start_1:end_1].astype(bool) * (label_val)
@@ -439,7 +455,7 @@ def enface_onnx_seg_func(
             torch.tensor(onnx_out).unsqueeze(0),
             original_shape,
             v2.InterpolationMode.NEAREST_EXACT,
-        ).numpy().astype(bool) * (label_val)
+        ).numpy().squeeze().astype(bool) * (label_val)
     else:
         final_seg = onnx_out.astype(bool) * (label_val)
 
@@ -493,6 +509,7 @@ def bscan_onnx_deconj_func(
     from torch.utils.data import DataLoader
     from torchvision.transforms.functional import InterpolationMode
     from torchvision.transforms.v2.functional import resize
+    import torchvision.transforms.v2 as v2
 
     data = data.transpose(-3, -1, -2)  # transpose back to original OCT coordinate system
 
@@ -536,10 +553,53 @@ def bscan_onnx_deconj_func(
 
     # NormalizeCLAHE2()
 
+    # calculate global min max values
+    pred_global_stats_ds = LoadNumpyData(
+        data,
+        chunk_size=batch_size,
+        transform=None,
+        preprocessing=None,
+        device=processor,
+    )
+
+    pred_global_stats_dl = DataLoader(
+        pred_global_stats_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
+
+    global_min = 0
+    global_max = 0
+    global_sum = 0
+    global_var = 0
+    total_samples = 0
+
+    # for image_batch in tqdm(pred_global_stats_dl,desc="Calculating Global image values"):
+    #     if image_batch.min() < global_min:
+    #         global_min = image_batch.min()
+    #     if image_batch.max() > global_max:
+    #         global_max = image_batch.max()
+    #     global_sum = global_sum + torch.sum(image_batch)
+    #     global_var = global_var + torch.sum(image_batch**2)
+    #     total_samples = total_samples + image_batch.numel()
+
+    # global_mean = global_sum / total_samples
+    # global_std = torch.sqrt((global_var/total_samples)-global_mean**2)
+    # print(f"global_min: {global_min}, global max: {global_max}\n")
+    # print(f"global_sum / total samples = global mean: {global_sum} / {total_samples} = {global_mean}\n")
+    # print(f"sqrt(global_var/total_samples) = global std: sqrt(({global_var}/{total_samples}) - {global_mean**2}) = {global_std}\n")
+    # print(f"data_min: {data.min()}, data_max: {data.max()}\n")
+    # print(f"data_mean: {data.mean()}, data_std: {data.std()}\n")
+
+    # #data = (data-global_min) / (global_max - global_min)
+    # data_t = torch.tensor(data.copy())
+    # starndardized_data_t = v2.functional.normalize(data_t,[global_mean],[global_std])
+    # data = starndardized_data_t.numpy().copy()
+    # data = (data-data.min()) / (data.max() - data.min())
+    # print(f"new data min: {data.min()}, new data max: {data.max()}\n")
+
     pred_trans = nn.Sequential(
         ResizeToFit(target_shape),
         PadToTargetM(**pttm_params),
-        Normalize(),  # Standardize(),Normalize(),
+        #Normalize(min_val=global_min,max_val=global_max),  # Standardize(),Normalize(),
     )
 
     pred_ds = LoadNumpyData(

@@ -71,7 +71,7 @@ def standardize_image_plugin(img: Image):
         #img.data.dtype != np.dtype(np.uint8)
         img.data.dtype != np.dtype(np.float16)
         and img.data.dtype != np.dtype(np.float32)
-        and img.data.dtype != img.data(np.float64)
+        and img.data.dtype != np.dtype(np.float64)
     ):
         raise NotImplementedError(
             f"This function does not support {img.data.dtype}, uint8, float16, float32, float64, and float128 are supported datatypes"
@@ -139,7 +139,7 @@ def normalize_in_range(
         img.data.dtype != np.dtype(np.uint8)
         and img.data.dtype != np.dtype(np.float16)
         and img.data.dtype != np.dtype(np.float32)
-        and img.data.dtype != img.data(np.float64)
+        and img.data.dtype != np.dtype(np.float64)
     ):
         raise NotImplementedError(
             f"This function does not support {img.data.dtype}, uint8, float16, float32, float64, and float128 are supported datatypes"

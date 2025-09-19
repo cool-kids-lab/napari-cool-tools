@@ -4,10 +4,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
+from napari.utils.notifications import show_info
 
 data_element_size = 4  # number of bytes per data element f32 == 4 bytes
 
-def ini_proc_word(line,target_str):
+
+def ini_proc_word(line, target_str):
     """"""
     words = line.split("=")
     index = words.index(target_str)
@@ -17,6 +19,7 @@ def ini_proc_word(line,target_str):
     else:
         print("ERROR in ini_proc_word function")
         return None
+
 
 def prof_get_reader(path):
     """Reader for COOL lab .prof file format.
@@ -43,9 +46,9 @@ def prof_get_reader(path):
 
         # case meta data is valid
         if meta is not None:
-            # print(
-            #     f"h,w,d,BMscan {meta}, size(bytes): {file_size}, data entries: {num_entries}"
-            # )
+            print(
+                f"h,w,d,BMscan {meta}, size(bytes): {file_size}, data entries: {num_entries}"
+            )
             # calculate width of data volume using height and depth info
             # from meta data file and calculated number of data entries
             h, w, d, bmscan, w_param, dtype, layer_type = meta
@@ -84,7 +87,7 @@ def prof_proc_meta(path, ext: str):
     height = None
     depth = None
 
-    # print(f"\nOpening file: {path}")
+    show_info(f"\nOpening file: {path}")
 
     head, tail = ospath.split(path)
 
@@ -100,15 +103,15 @@ def prof_proc_meta(path, ext: str):
 
     # constuct path to metafile assumed to be in same directory
     meta_path = ospath.join(head, file_base + ".xml")
-    # print(f"Associated .xml meta data file: {meta_path}")
+    show_info(f"Associated .xml meta data file: {meta_path}")
     meta_path2 = ospath.join(head, file_base + ".ini")
-    # print(f"Associated .ini meta data file: {meta_path2}")
+    show_info(f"Associated .ini meta data file: {meta_path2}")
 
     # verify whether meta file exists or not
     # if isinstance(meta_path, str):
 
     if Path(meta_path2).is_file():
-        # print(".ini Meta Data exists:")
+        show_info(".ini Meta Data exists:")
         width_param, height, width, depth, bmscan = (
             None,
             None,
@@ -117,31 +120,33 @@ def prof_proc_meta(path, ext: str):
             None,
         )
 
-        data = {"section":"", "content":""}
+        data = {"section": "", "content": ""}
         settings = []
 
         with open(meta_path2) as file:
-            for i,line in enumerate(file):
+            for i, line in enumerate(file):
                 if "[" not in line:
                     data["content"] = f"{data['content']}{line}"
 
                     if data["section"] == "General" and "WIDTH=" in line:
-                        width_param = ini_proc_word(line,"WIDTH")
+                        width_param = ini_proc_word(line, "WIDTH")
                     if data["section"] == "General" and "HEIGHT=" in line:
-                        height = ini_proc_word(line,"HEIGHT")
+                        height = ini_proc_word(line, "HEIGHT")
                     if data["section"] == "General" and "FRAMES=" in line:
-                        depth = ini_proc_word(line,"FRAMES")
+                        depth = ini_proc_word(line, "FRAMES")
                     if data["section"] == "OCT" and "BScanWidth=" in line:
-                        width = ini_proc_word(line,"BScanWidth")
+                        width = ini_proc_word(line, "BScanWidth")
                     if data["section"] == "OCTA" and "BMScan=" in line:
-                        bmscan = ini_proc_word(line,"BMScan")
+                        bmscan = ini_proc_word(line, "BMScan")
                 else:
                     if i != 0:
                         settings.append(data)
-                    data = {"section":"", "content":""}
-                    data["section"] = line.replace("[","").replace("]","").replace("\n","")
+                    data = {"section": "", "content": ""}
+                    data["section"] = (
+                        line.replace("[", "").replace("]", "").replace("\n", "")
+                    )
                     settings
-            settings.append(data)        
+            settings.append(data)
 
         dtype = None
         layer_type = None
@@ -167,7 +172,7 @@ def prof_proc_meta(path, ext: str):
             return None
 
     if Path(meta_path).is_file():
-        # print(".xml Meta Data exists:")
+        show_info(".xml Meta Data exists:")
 
         tree = ET.parse(meta_path)
         root = tree.getroot()
@@ -200,9 +205,7 @@ def prof_proc_meta(path, ext: str):
 
         # Case no valid values obtained from metafile return None
         if (
-            depth is not None
-            and height is not None
-            and width is not None
+            depth is not None and height is not None and width is not None
             # and bmscan is not None
             # and width_param is not None
         ):
@@ -268,21 +271,21 @@ def prof_file_reader(path):
     display = np.flip(b_scan.transpose(0, 2, 1), 1)
     # display = b_scan
 
-    # # Determine if volume is octa
-    # if bmscan is not None and bmscan > 1:
-    #     print("This is an OCTA Volume!!")
-    #     sign = 1
-    #     fix_octa = np.empty_like(display)
-    #     for i in range(len(fix_octa)):
-    #         if sign == -1:
-    #             fix_octa[i] = np.flip(display[i], axis=1)
-    #             #fix_octa[i] = display[i]
-    #         else:
-    #             fix_octa[i] = display[i]
-    #         if (i + 1) % bmscan == 0:
-    #             sign = sign * -1
+    # Determine if volume is octa
+    if bmscan is not None and bmscan > 1:
+        show_info("This is an OCTA Volume!!")
+        sign = 1
+        fix_octa = np.empty_like(display)
+        for i in range(len(fix_octa)):
+            if sign == -1:
+                fix_octa[i] = np.flip(display[i], axis=1)
+                # fix_octa[i] = display[i]
+            else:
+                fix_octa[i] = display[i]
+            if (i + 1) % bmscan == 0:
+                sign = sign * -1
 
-    #     display = fix_octa
+        display = fix_octa
 
     # optional kwargs for viewer.add_* method
     add_kwargs = {"name": file_name}
@@ -293,7 +296,7 @@ def prof_file_reader(path):
     else:
         pass
 
-    print(
-        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n" #bmscan: {bmscan},
+    show_info(
+        f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n"  # bmscan: {bmscan},
     )
     return [(display, add_kwargs, layer_type)]

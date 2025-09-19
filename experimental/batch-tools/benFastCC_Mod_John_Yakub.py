@@ -118,14 +118,14 @@ def cartify(
     #sweep=105,
     angle=105,
     refractive_index=1.0, #1.33
-    imaging_range=6.0, #12.0
+    imaging_range=12.0, #6.0
     pivot_point= 19.0,
     ref_motor_location=0.0,
     img_motor_location=0.0,
-    ds=1, #downsample factor
-    down_sample_factor = 0.5,
-    res=1 / 6, # resolution
-    threshold=5,
+    ds=0,#1, #downsample factor
+    down_sample_factor = 1.0, #0.5,
+    res=1.0, #1 / 6, # resolution
+    threshold=0, #5,
     chunk_size=8, #16,
     save=False,
     circleCrop=1,
@@ -174,13 +174,13 @@ def cartify(
 
     #r_pad = int(round(r * 1.66)) # 1.66 magic number?
     #r_pad = int(round(r) + padding_pixel)
-    r_pad = padding_pixel
+    #r_pad = padding_pixel
 
     #print(f"r: {int(round(r))}, r_pad: {r_pad}, padding: {padding}, pixel_spacing: {pixel_spacing},padding_pixel: {padding_pixel}\n")
-    print(f"imaging range in pixels: {data.shape[1]}, r_pad: {r_pad}, padding: {padding}, pixel_spacing: {pixel_spacing}, padding_pixel: {padding_pixel}\n")
+    print(f"imaging range in pixels: {data.shape[1]}, padding: {padding}, pixel_spacing: {pixel_spacing}, padding_pixel: {padding_pixel}\n")
    
 
-    zeros_array_dimensions = (thetax, r_pad, thetay)
+    zeros_array_dimensions = (thetax, padding_pixel, thetay)
     data = np.pad(
         data,
         ((0, 0), (zeros_array_dimensions[1], 0), (0, 0)),
@@ -211,28 +211,35 @@ def cartify(
 
     num_r, num_thx, num_thy = data.shape
     #radians = sweep * (np.pi / 180) * 2
-    #radians = angle * (np.pi / 180) #* 2
-    radians = angle * (np.pi / 180) * 2
+    radians = angle * (np.pi / 180) #* 2
+    #radians = angle * (np.pi / 180) * 2
 
     # Really not sure why its angle/4, but that's what works...
     # Really not sure why its radians/4, but that's what works...
     r = cp.linspace(0, num_r, int(num_r))
-    thx = cp.linspace(-radians / 4, radians / 4, int(num_thx))
-    thy = cp.linspace(-radians / 4, radians / 4, int(num_thy))
-    # thx = cp.linspace(-radians / 2, radians / 2, int(num_thx))
-    # thy = cp.linspace(-radians / 2, radians / 2, int(num_thy))
+    # thx = cp.linspace(-radians / 4, radians / 4, int(num_thx))
+    # thy = cp.linspace(-radians / 4, radians / 4, int(num_thy))
+    thx = cp.linspace(-radians / 2, radians / 2, int(num_thx))
+    thy = cp.linspace(-radians / 2, radians / 2, int(num_thy))
 
     #x_dim = y_dim = int(num_r * np.sin(radians / 2))
     x_dim = y_dim = int(num_r * np.sin(radians / 2))
 
     z_dim = int(num_r)
 
-    x_res = y_res = int(num_r * res)
-    # x_res = int(num_r * res)
-    # y_res = int(num_r * (thetay/thetax))
-    #x_res = y_res = int(num_r * res*2)
-    z_res = int(z_dim * res / 2)
-    #z_res = int(z_dim * res ) #/ 2)
+    # x_res = y_res = int(num_r * res)
+    # # x_res = int(num_r * res)
+    # # y_res = int(num_r * (thetay/thetax))
+    # #x_res = y_res = int(num_r * res*2)
+    # z_res = int(z_dim * res / 2)
+    # #z_res = int(z_dim * res ) #/ 2)
+
+
+    # calculate resolutions
+    x_res = y_res = int(num_r * res *2)
+    z_res = int(num_r / res)
+
+
     x = cp.linspace(-x_dim, x_dim, x_res)
     y = cp.linspace(-y_dim, y_dim, y_res)
     z = cp.linspace(0, z_dim, z_res)
