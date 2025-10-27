@@ -8,12 +8,27 @@ __all__ = ()
 import napari
 import torch
 from napari.utils.notifications import show_info
-
-# from qtreload import QtReloadWidget
+from dataclasses import dataclass
 
 viewer = napari.current_viewer()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+@dataclass
+class unp_meta:
+    width: int = 0
+    height: int = 0
+    depth: int = 0
+    bmscan: int = 0
+    vista: int = 0
+    packed: bool = False
+    double_side: bool = False
+    pattern: str = "Sine"
+    full_range: bool = False
+    auto_dispersion: bool = False
+    desine: bool = False
+    delay: int = 0
+    sine_frame_indices: list = None # type: ignore
+    sine_hires_ratio: int = 0
 
 def memory_stats():
     show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")

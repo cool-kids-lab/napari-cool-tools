@@ -3,6 +3,7 @@ __version__ = "0.0.1"
 __all__ = ()
 
 from enum import Enum
+import numpy as np
 
 
 class Preproc(Enum):
@@ -17,9 +18,17 @@ class Preproc(Enum):
 class Augmentation(Enum):
     RandCropResizeAspectRat = "Random_Crop_Resized_Aspect_Ratio"
 
-
 class OCTACalc(Enum):
     STD = "Standard Deviation"
     VAR = "Variance"
     VAR2 = "Variance Squared"
     ADA = "Adaptive Decorrelation"
+
+# Enums are a convenient way to get a dropdown menu
+class Operation(Enum):
+    """A set of valid arithmetic operations for image_arithmetic."""
+
+    add = np.add
+    subtract = np.subtract
+    multiply = np.multiply
+    divide = np.divide

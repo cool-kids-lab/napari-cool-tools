@@ -20,7 +20,6 @@ def ini_proc_word(line, target_str):
         print("ERROR in ini_proc_word function")
         return None
 
-
 def prof_get_reader(path):
     """Reader for COOL lab .prof file format.
 
@@ -67,7 +66,6 @@ def prof_get_reader(path):
 
         return prof_file_reader
     return None
-
 
 def prof_proc_meta(path, ext: str):
     """Process .prof file metadata.
@@ -268,24 +266,24 @@ def prof_file_reader(path):
     # to better orient b-scans for manual segmentation
     display = b_scan.transpose(0, 2, 1)
     # display = display[:,::-1,:]
-    display = np.flip(b_scan.transpose(0, 2, 1), 1)
-    # display = b_scan
+    # display = np.flip(b_scan.transpose(0, 2, 1), 1)
+    # # display = b_scan
 
-    # Determine if volume is octa
-    if bmscan is not None and bmscan > 1:
-        show_info("This is an OCTA Volume!!")
-        sign = 1
-        fix_octa = np.empty_like(display)
-        for i in range(len(fix_octa)):
-            if sign == -1:
-                fix_octa[i] = np.flip(display[i], axis=1)
-                # fix_octa[i] = display[i]
-            else:
-                fix_octa[i] = display[i]
-            if (i + 1) % bmscan == 0:
-                sign = sign * -1
+    # # Determine if volume is octa
+    # if bmscan is not None and bmscan > 1:
+    #     show_info("This is an OCTA Volume!!")
+    #     sign = 1
+    #     fix_octa = np.empty_like(display)
+    #     for i in range(len(fix_octa)):
+    #         if sign == -1:
+    #             fix_octa[i] = np.flip(display[i], axis=1)
+    #             # fix_octa[i] = display[i]
+    #         else:
+    #             fix_octa[i] = display[i]
+    #         if (i + 1) % bmscan == 0:
+    #             sign = sign * -1
 
-        display = fix_octa
+    #     display = fix_octa
 
     # optional kwargs for viewer.add_* method
     add_kwargs = {"name": file_name}

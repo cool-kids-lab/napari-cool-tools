@@ -70,11 +70,11 @@ def curve_correction(
     y = R * np.sin(TH)  # we need to consider the unequally spaced pixel
     y = y + output_size * 0.5 - 0.5
 
-    coordinates = np.array([x, y])
+    coordinates = np.array([x, y],dtype=np.float32)
     coordinates_gpu = cu.asarray(coordinates)
 
     output_image = np.zeros(
-        (output_size_th, output_size, data.shape[2])
+        (output_size_th, output_size, data.shape[2]),dtype=np.float32
     )  # [840, 840,1024]
 
     for fnum in range(0, data.shape[2]):  # 1024 iteration
@@ -157,10 +157,10 @@ def curve_correction(
     right_image = radius - int(radius * np.sin(angle / 180 * np.pi))
 
     output_image = np.zeros(
-        (data.shape[0], int(resolution / 2) - top_image, resolution)
+        (data.shape[0], int(resolution / 2) - top_image, resolution),dtype=np.float32
     )
 
-    coordinates = np.array([new_ir, new_ith])
+    coordinates = np.array([new_ir, new_ith],dtype=np.float32)
     coordinates_gpu = cu.asarray(coordinates)
 
     for frame, image in enumerate(data):  # 840 iteration
@@ -231,10 +231,10 @@ def curve_correction(
     new_ir = ir(new_r)
     new_ith = ith(new_th)
 
-    coordinates = np.array([new_ir, new_ith])
+    coordinates = np.array([new_ir, new_ith],dtype=np.float32)
     coordinates_gpu = cu.asarray(coordinates)
 
-    output_image = np.zeros((data.shape[0], output_size, output_size))
+    output_image = np.zeros((data.shape[0], output_size, output_size),dtype=np.float32)
     for fnum in range(0, data.shape[0]):  # 1024 iteration
         image = data[fnum, :, :]
         image = resize(image, (num_r, num_theta), order=3)  # this is important

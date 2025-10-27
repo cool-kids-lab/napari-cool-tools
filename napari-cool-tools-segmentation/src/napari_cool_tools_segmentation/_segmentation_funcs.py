@@ -139,7 +139,7 @@ def bscan_onnx_seg_func(
                     "trt_timing_cache_enable": True,  # True,
                     "trt_timing_cache_path": onnx_folder_path,
                     "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    # "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                 },
             ),
             (
@@ -152,7 +152,7 @@ def bscan_onnx_seg_func(
                     "do_copy_in_default_stream": True,
                     "cudnn_conv_use_max_workspace": "1",
                     "user_compute_stream": str(torch.cuda.current_stream().cuda_stream)
-                    #"user_compute_stream": str(torch.cuda.Stream().cuda_stream),
+                    # "user_compute_stream": str(torch.cuda.Stream().cuda_stream),
                 },
             ),
             "CPUExecutionProvider",

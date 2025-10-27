@@ -29,6 +29,9 @@ contributions:
     - id: napari-cool-tools-oct-preproc.shift_label
       title: Shift Label
       python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:shift_label_plugin
+    - id: napari-cool-tools-oct-preproc.image_arithmetic
+      title: Image Arithmetic
+      python_name: napari_cool_tools_oct_preproc._oct_preproc_utils:image_arithmetic_plugin
   widgets:
     - command: napari-cool-tools-oct-preproc.preproc_bscan
       display_name: Preprocess Bscan
@@ -56,4 +59,7 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-oct-preproc.shift_label
       display_name: Shift Label
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.image_arithmetic
+      display_name: Image Arithmetic
       autogenerate: true

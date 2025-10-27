@@ -74,95 +74,6 @@ def spherical2cartesian_chunked(
     log_time("Completed spherical to Cartesian conversion")
     return output
 
-# # Add timestamps to your functions
-# def spherical2cartesian_chunked(
-#     r, thx, thy, grid, x, y, z, sweep=140, order=3, chunk_size=64
-# ):
-#     # log_time("Starting spherical to Cartesian conversion")
-
-#     # Prepare the output array
-#     cartesian_shape = (len(x), len(y), len(z))
-#     output = np.zeros(cartesian_shape, dtype=grid.dtype)
-
-#     # Iterate over chunks along the z-axis
-#     # for z_start in range(0, len(z), chunk_size):
-#     for z_start in tqdm(range(0, len(z), chunk_size), desc="Processing", unit="chunk"):
-#         z_end = z_start + chunk_size
-
-#         #convert at Z chunk
-#         Z = z[z_start:z_end][None, None, :]  # Shape: (1, 1, z_chunk_size)
-#         X = x[:, None, None].repeat(Z.shape[-1], axis=-1)  # Broadcast X
-#         Y = y[None, :, None].repeat(Z.shape[-1], axis=-1)
-
-#         #this is used for safety to make sure that they can be mathematically summed
-#         X, Y, Z = cp.broadcast_arrays(X, Y, Z)
-
-#         # Compute spherical coordinates for this chunk
-#         new_r = cp.sqrt(X**2 + Y**2 + Z**2).astype(cp.float32)
-#         new_thx = cp.arctan2(X, Z).astype(cp.float32)
-#         new_thy = cp.arctan2(Y, Z).astype(cp.float32)
-
-
-#         #this will create a rectangular crop instead of a circular one
-#         # Interpolate on GPU
-
-#         new_ir = cp.interp(new_r.ravel(), r, cp.arange(len(r)), left=len(r) + 1, right=len(r) + 1)
-#         new_ithx = cp.interp(
-#             new_thx.ravel(), thx, cp.arange(len(thx)), left=len(thx) + 1, right=len(thx) + 1
-#         )
-#         new_ithy = cp.interp(
-#             new_thy.ravel(), thy, cp.arange(len(thy)), left=len(thy) + 1, right=len(thy) + 1
-#         )
-
-#         valid_points = cp.array([new_ir, new_ithx, new_ithy])
-#         interpolated = map_coordinates(cp.asarray(grid), valid_points, order=3, mode="constant", cval=0.0)
-#         output[:, :, z_start:z_end] = interpolated.get().reshape(new_r.shape)
-
-#         # # Compute valid indices for this chunk
-#         # valid_mask = (new_r.ravel() <= r.max()) & (new_r.ravel() >= r.min())
-#         # valid_mask &= (new_thx.ravel() <= thx.max()) & (new_thx.ravel() >= thx.min())
-#         # valid_mask &= (new_thy.ravel() <= thy.max()) & (new_thy.ravel() >= thy.min())
-
-#         # if valid_mask.any():
-#         #     # Get the bounding indices for the valid region
-#         #     r_min, r_max = (
-#         #         int(new_ir[valid_mask].min()),
-#         #         int(new_ir[valid_mask].max()) + 1,
-#         #     )
-#         #     thx_min, thx_max = (
-#         #         int(new_ithx[valid_mask].min()),
-#         #         int(new_ithx[valid_mask].max()) + 1,
-#         #     )
-#         #     thy_min, thy_max = (
-#         #         int(new_ithy[valid_mask].min()),
-#         #         int(new_ithy[valid_mask].max()) + 1,
-#         #     )
-
-#             # Slice the grid to the valid region
-#             # grid_slice = cp.asarray(grid[r_min:r_max, thx_min:thx_max, thy_min:thy_max])
-#             # # Adjust indices to fit within the local grid slice
-#             # local_ir = new_ir[valid_mask] - r_min
-#             # local_ithx = new_ithx[valid_mask] - thx_min
-#             # local_ithy = new_ithy[valid_mask] - thy_min
-
-#             # Map coordinates in the local grid slice
-#             # valid_points = cp.array([local_ir, local_ithx, local_ithy])
-#             # interpolated = map_coordinates(grid_slice, valid_points, order=order)
-
-#             # Place interpolated values in the output array for this chunk
-#             # interpolated_chunk = cp.zeros_like(new_r.ravel(), dtype=grid.dtype)
-#             # interpolated_chunk[valid_mask] = interpolated
-#             # output[:, :, z_start:z_end] = interpolated_chunk.get().reshape(new_r.shape)
-
-
-#         # del X_chunk, Y_chunk, Z_chunk, new_r, new_th, new_phi
-#         # cp.get_default_memory_pool().free_all_blocks()
-#         # gc.collect()
-#         # del X, Y, Z, new_r, new_thx, new_thy
-
-#     log_time("Completed spherical to Cartesian conversion")
-#     return output
-
 
 # def cartify(file, sweep=102, ds=1, res=1/6, threshold=5, chunk_size=16, save = False, circleCrop = 1):
 def cartify(
@@ -251,19 +162,26 @@ def cartify(
     thx = cp.linspace(-radians/2, radians/2 , num_thx)
     thy = cp.linspace(-radians/2, radians/2, num_thy)
 
+    # x_dim = num_r# * np.sin(radians / 2)
+    # y_dim = num_r# * np.sin(radians / 2)
+    # z_dim = num_r
 
-    x_dim = num_r * np.sin(radians / 2)
-    y_dim = num_r * np.sin(radians / 2)
-    z_dim = num_r
+    # x_res = int(x_dim * 2) #output resolution
+    # y_res = int(y_dim * 2)
+    # z_res = int(z_dim * 1)
 
-    x_res = int(x_dim * 2) #output resolution
-    y_res = int(y_dim * 2)
-    z_res = int(z_dim * 1)
+    # #this is the target output grid
+    # x = cp.linspace(-x_dim, x_dim, x_res)
+    # y = cp.linspace(-y_dim, y_dim, y_res)
+    # z = cp.linspace(0, z_dim, z_res)
+    
+    th = np.linspace(-np.pi/2, np.pi/2, num_r*2)
+    ph = np.linspace(-np.pi/2, np.pi/2, num_r*2)
+    rz = np.linspace(0, num_r, num_r)
 
-    #this is the target output grid
-    x = cp.linspace(-x_dim, x_dim, x_res)
-    y = cp.linspace(-y_dim, y_dim, y_res)
-    z = cp.linspace(0, z_dim, z_res)
+    x = rz[:, None, None] *np.sin(ph[None,:,None]) * np.cos(th[None, None, :])
+    y = rz[:, None, None] *np.sin(ph[None,:,None]) * np.sin(th[None, None, :])
+    z = rz[:, None, None] *np.cos(ph[None,:,None])
 
     # print(f"output shape will be: {x_res},{y_res},{z_res}\n")
 

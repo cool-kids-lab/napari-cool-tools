@@ -19,6 +19,7 @@ from napari_cool_tools_oct_preproc import (
     Augmentation,
     OCTACalc,
     Preproc,
+    Operation,
 )
 from napari_cool_tools_oct_preproc._oct_preproc_utils_funcs import (
     data_augmentation,
@@ -103,6 +104,19 @@ def shift_label_plugin(
     
     dd = np.roll(label.data,shift=shift*val,axis=axis)
     viewer.add_labels(dd,name=label.name+"_shifted")
+
+def image_arithmetic_plugin(
+    layerA: Image,
+    operation: Operation,
+    layerB: Image,
+):
+    """Adds, subtracts, multiplies, or divides two same-shaped image layers."""
+
+    name = "image_operation_"+operation.value.__name__
+    layer_type = "image"
+    add_kwargs = {"name": name}
+    out_image = Layer.create(operation.value(layerA.data, layerB.data), add_kwargs, layer_type)
+    viewer.add_layer(out_image)
 
 
 def generate_enface_plugin(

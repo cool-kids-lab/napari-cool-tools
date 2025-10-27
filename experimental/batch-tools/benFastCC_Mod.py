@@ -166,7 +166,7 @@ def cartify(
     thx = cp.linspace(-angle / 4, angle / 4, int(num_thx))
     thy = cp.linspace(-angle / 4, angle / 4, int(num_thy))
 
-    x_dim = y_dim = int(num_r * np.sin(angle / 2))
+    x_dim = y_dim = int(num_r * np.sin(angle / 2))#why devided by two?
     z_dim = int(num_r)
 
     x_res = y_res = int(num_r * res)
