@@ -15,9 +15,7 @@ def main() -> bool:
 
     @magicgui(call_button="Install")
     def napari_install(
-        version: Literal["development", "production"] = "production",
-        backend: Literal["cpu", "cuda11", "cuda12"] = "cpu",
-        visualization: bool = False,
+        backend: Literal["cpu", "cuda12"] = "cpu"
     ):
         """Installs Napari with selected configuration.
 
@@ -28,11 +26,6 @@ def main() -> bool:
         """
         try:
             features: List[str] = [backend]
-
-            if version == "development":
-                features.append("development")
-                if visualization:
-                    features.append("visualization")
 
             # Load pixi.toml
             with open("pixi.toml", "r", encoding="utf-8") as file:

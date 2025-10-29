@@ -3,21 +3,9 @@ __version__ = "0.0.1"
 __all__ = ()
 
 from enum import Enum
-import numpy as np
+import torch
 
-
-class Preproc(Enum):
-    NLCGbBb = "Norm_Log_CLAHE_Gblur_Bblur"
-    SNLC = "Stand_Nom_Log_CLAHE"
-    SNL = "Stand_Norm_Log"
-    SN = "Stand_Norm"
-    CCL = "Conditional_CLAHE_Log"
-    RRAR = "Random_Resized_Aspect_Ratio"
-
-
-class Augmentation(Enum):
-    RandCropResizeAspectRat = "Random_Crop_Resized_Aspect_Ratio"
-
+# Enums are a convenient way to get a dropdown menu
 class OCTACalc(Enum):
     STD = "Standard Deviation"
     VAR = "Variance"
@@ -27,8 +15,14 @@ class OCTACalc(Enum):
 # Enums are a convenient way to get a dropdown menu
 class Operation(Enum):
     """A set of valid arithmetic operations for image_arithmetic."""
+    add = torch.add
+    subtract = torch.sub
+    multiply = torch.mul
+    divide = torch.div
 
-    add = np.add
-    subtract = np.subtract
-    multiply = np.multiply
-    divide = np.divide
+    # Enums are a convenient way to get a dropdown menu
+class ShiftDir(Enum):
+    """A set of valid directions for shifting an image."""
+    AXIAL = 1
+    LATERAL_FAST = 2
+    LATERAL_SLOW = 0

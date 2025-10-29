@@ -3,9 +3,7 @@ This module contains code for calculating and manipulating projections of volume
 """
 
 from napari.types import ImageData
-
 from napari_cool_tools_vol_proc import ProjectionDir, ProjectionType
-
 
 def projection(
     data: ImageData,

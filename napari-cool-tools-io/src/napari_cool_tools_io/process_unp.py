@@ -1,112 +1,13 @@
-from napari.utils.notifications import show_info
 import math
 from pathlib import Path
-from networkx import display
 import numpy as np
 from tqdm import tqdm
 import torch
 from napari_cool_tools_io import unp_meta
 import torch.nn.functional as F
-
-def desine_torch(frame: torch.Tensor,mode = "bilinear", transpose: bool = False) -> torch.Tensor:
-
-    if mode == "bilinear":
-        return desine_torch_bilinear(frame, transpose=transpose)
-    else:
-        return desine_torch_nearest(frame, transpose=transpose)
-
-def desine_torch_nearest(frame: torch.Tensor, transpose: bool = False) -> torch.Tensor:
-    # Work along the width dimension by transposing to (W, H)
-    if transpose:
-        frame = torch.transpose(frame, 1, 0)  # shape now (W, H)
-
-    H, W = frame.shape  # Note: H <- original W, W <- original H (naming kept for consistency)
-    device = frame.device
-    dtype  = frame.dtype
-
-    # Target uniform coordinates (0..W-1)
-    Yn = torch.arange(W, device=device, dtype=dtype)
-
-    # Warped source coordinates along width: y_org in [0, W]
-    angles = (torch.pi / W) * torch.arange(W, device=device, dtype=dtype) - (torch.pi / 2)
-    y_org  = (W / 2) * torch.sin(angles) + (W / 2)  # strictly increasing
-
-    # Find enclosing indices: y_org[idx-1] <= Yn < y_org[idx]
-    idx = torch.bucketize(Yn, y_org)  # (W,), in [0..W]
-
-    # Track out-of-bounds (below first or above last), for zero-fill
-    oob = (idx == 0) | (idx == W)
-
-    # Clamp to valid interior to form left/right candidates
-    idx = idx.clamp(1, W - 1)
-    left  = idx - 1
-    right = idx
-
-    # Choose nearest between y_org[left] and y_org[right]
-    dleft  = (Yn - y_org[left]).abs()
-    dright = (Yn - y_org[right]).abs()
-    nearest = torch.where(dright < dleft, right, left)  # tie -> left kept
-
-    # Gather nearest columns for all rows (broadcasted column indexing)
-    out = frame[:, nearest]  # shape (H, W)
-
-    # Zero fill outside interpolation domain (to match fill_value=0 behavior)
-    if oob.any():
-        out[:, oob] = 0
-
-    # Restore original (H, W) orientation
-    if transpose:
-        out = torch.transpose(out, 1, 0)
-
-    return out
-
-def desine_torch_bilinear(frame: torch.Tensor, transpose: bool = False) -> torch.Tensor:
-    if transpose:
-        frame = torch.transpose(frame, 1, 0)
-
-    H, W = frame.shape
-    device = frame.device
-    dtype  = frame.dtype
-
-    # Target uniform coordinates (like Yn = np.arange(W))
-    Yn = torch.arange(W, device=device, dtype=dtype)
-
-    # Source (warped) coordinates along width: y_org = (W/2) * sin(angles) + (W/2)
-    angles = (torch.pi / W) * torch.arange(W, device=device, dtype=dtype) - (torch.pi / 2)
-    y_org  = (W / 2) * torch.sin(angles) + (W / 2)  # strictly increasing
-
-    # For each target x=Yn[j], find enclosing interval in y_org
-    # bucketize gives index i such that y_org[i-1] <= Yn[j] < y_org[i]
-    idx = torch.bucketize(Yn, y_org)  # shape (W,), in [0..W]
-    # Identify out-of-range targets (to be filled with 0)
-    oob = (idx == 0) | (idx == W)
-
-    # Clamp to valid interior for interpolation
-    idx = idx.clamp(1, W - 1)
-    x0  = idx - 1
-    x1  = idx
-
-    y0 = y_org[x0]  # (W,)
-    y1 = y_org[x1]  # (W,)
-    denom = (y1 - y0)
-    # Safe ratio (linear weight), denom should be > 0 since y_org is strictly increasing
-    t = (Yn - y0) / denom
-
-    # Gather source samples for all rows at columns x0, x1
-    # frame[:, x0] yields (H, W) by broadcasting column indices across rows
-    v0 = frame[:, x0]  # (H, W)
-    v1 = frame[:, x1]  # (H, W)
-
-    out = v0 + (v1 - v0) * t  # broadcast t over rows
-
-    # Zero fill outside the interpolation domain (matches fill_value=0)
-    if oob.any():
-        out[:, oob] = 0
-
-    if transpose:
-        out = torch.transpose(out, 1, 0)
-
-    return out
+from napari_cool_tools_oct_preproc._oct_preproc_func import desine
+from napari.utils.notifications import show_info
+from napari_cool_tools_io import device
 
 def torch_like_numpy_median(x: torch.Tensor, dim=None, keepdim=False) -> torch.Tensor:
     """
@@ -143,7 +44,6 @@ def torch_like_numpy_median(x: torch.Tensor, dim=None, keepdim=False) -> torch.T
         result = result.unsqueeze(dim)
 
     return result
-
 
 def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
     """
@@ -378,12 +278,7 @@ def unpack12_torch(buf: torch.Tensor) -> torch.Tensor:
 
 def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
 
-    if torch.cuda.is_available():
-        show_info("CUDA is available. Using GPU for processing.")
-        device = torch.device("cuda")
-    else:
-        show_info("CUDA is not available. Using CPU for processing.")
-        device = torch.device("cpu")
+    show_info("Starting unp file processing...")
     
     # read 2 bytes size for uint16
     if meta.packed:
@@ -422,17 +317,20 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
         subtracted_signal = dc_subtraction_double_sweep_torch(array)
         
         # 1D Hamming window (like np.hamming)
-        hamming = torch.hamming_window(subtracted_signal.shape[1], periodic=False, dtype=subtracted_signal.dtype, device=subtracted_signal.device)
+        hamming = torch.hamming_window(meta.width, periodic=False, dtype=subtracted_signal.dtype, device=subtracted_signal.device)
         hamming = hamming.unsqueeze(0).repeat(subtracted_signal.shape[0], 1)
         hamming_signal = subtracted_signal * hamming
 
         dispMaxOrder = 3
-        coeffRange = 100
 
         if meta.auto_dispersion:
-            dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,coeffRange)
+            dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,meta.dispersion_range)
+            print(f"Dispersion coefficients: {dispCoeffs.squeeze().cpu().numpy()}")
         else:
             dispCoeffs = torch.tensor([0 , 0], device=hamming_signal.device) #disable dispersion compensation
+
+        if meta.inverse_dispersion:
+            dispCoeffs = -dispCoeffs
 
         byte_reader.seek(0, 0)
         
@@ -467,20 +365,24 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
 
             oct_vol_array[frame_num] = temp_frame
 
-
-    #apply double side
-    if meta.double_side:
-        # reverse the height axis for every odd B-scan (works for torch.Tensor)
-        oct_vol_array[1::2, :, :] = torch.flip(oct_vol_array[1::2, :, :], dims=[1])
-
     #apply desine
     if meta.desine:
         for i in range(oct_vol_array.shape[0]):
-            oct_vol_array[i] = desine_torch(oct_vol_array[i], mode="bilinear", transpose=True)
+            oct_vol_array[i] = desine(oct_vol_array[i], mode="bilinear", transpose=True)
+
+    oct_vol_array = oct_vol_array.cpu().numpy()
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
+    show_info("Finished unp file processing.")
     
-    return oct_vol_array.cpu().numpy()
+    return oct_vol_array
 
 def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarray, np.ndarray]:
+
+    show_info("Starting unp file processing.")
 
     indices = meta.sine_frame_indices
     pause_index = indices[::2]
@@ -493,13 +395,6 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
     delay = round((ini_delay/10)*(hires_ratio-1) * 2)
 
     low_res_depth = meta.depth - len(pause_index)*hires_d*hires_ratio
-
-    if torch.cuda.is_available():
-        show_info("CUDA is available. Using GPU for processing.")
-        device = torch.device("cuda")
-    else:
-        show_info("CUDA is not available. Using CPU for processing.")
-        device = torch.device("cpu")
     
     # read 2 bytes size for uint16
     if meta.packed:
@@ -549,14 +444,15 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
         hamming_hires = hamming_hires.unsqueeze(0).repeat(hires_h, 1)
 
         dispMaxOrder = 3
-        coeffRange = 100
 
         if meta.auto_dispersion:
-            dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,coeffRange)
+            dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,meta.dispersion_range)
         else:
             dispCoeffs = torch.tensor([0 , 0], device=hamming_signal.device) #disable dispersion compensation
 
-        
+        if meta.inverse_dispersion:
+            dispCoeffs = -dispCoeffs
+
         frame_counter = 0
         frame_counter_lowres = 0
         frame_counter_hires = 0
@@ -675,13 +571,17 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
     #applt desine both volumes
     if meta.desine:
         for i in range(oct_vol_array.shape[0]):
-            oct_vol_array[i] = desine_torch(oct_vol_array[i], mode="bilinear", transpose=True)
+            oct_vol_array[i] = desine(oct_vol_array[i], mode="bilinear", transpose=True)
 
         for i in range(oct_vol_array_hires.shape[0]):
-            oct_vol_array_hires[i] = desine_torch(oct_vol_array_hires[i], mode="bilinear", transpose=True)
+            oct_vol_array_hires[i] = desine(oct_vol_array_hires[i], mode="bilinear", transpose=True)
+
+    oct_vol_array, oct_vol_array_hires = oct_vol_array.cpu().numpy(), oct_vol_array_hires.cpu().numpy()
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
+    show_info("Finished unp file processing.")
     
-    return oct_vol_array.cpu().numpy(), oct_vol_array_hires.cpu().numpy()
-    
-
-
-
+    return oct_vol_array, oct_vol_array_hires

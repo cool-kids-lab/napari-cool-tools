@@ -1,4 +1,3 @@
-import os
 import os.path as ospath
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -9,10 +8,12 @@ from napari_cool_tools_io.process_unp import process_unp, process_unp_sine_pause
 from qtpy.QtWidgets import QVBoxLayout, QHBoxLayout
 from qtpy.QtWidgets import QCheckBox
 from qtpy.QtWidgets import QDialog, QDialogButtonBox
-from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional
 from napari_cool_tools_io import unp_meta
+from qtpy.QtWidgets import QWidget, QSpinBox, QLabel, QHBoxLayout
+from napari_cool_tools_oct_preproc._oct_preproc_func import generate_octa
+from napari_cool_tools_oct_preproc._oct_preproc_func import reshuffle_vista_frames
+from skimage.transform import resize
 
 def xml_dialog(parent=None, double_side_button=True, full_range_button=True, auto_dispersion_button=True, desine_button=True):
     """Show a modal dialog with a 'Double-sided' checkbox and Accept/Cancel buttons.
@@ -34,6 +35,31 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
     auto_dispersion_checkbox = QCheckBox("Auto Dispersion Compensation")
     auto_dispersion_checkbox.setChecked(False)
 
+    inverse_dispersion_checkbox = QCheckBox("Inverse Dispersion")
+    inverse_dispersion_checkbox.setChecked(False)
+    inverse_dispersion_checkbox.setEnabled(auto_dispersion_checkbox.isChecked())
+
+    # add a spinbox next to the Auto Dispersion checkbox
+    auto_dispersion_spinbox = QSpinBox()
+    auto_dispersion_spinbox.setRange(0, 10000)
+    auto_dispersion_spinbox.setSingleStep(1)
+    auto_dispersion_spinbox.setValue(100)
+    auto_dispersion_spinbox.setEnabled(auto_dispersion_checkbox.isChecked())
+
+    # keep spinbox enabled/disabled in sync with the checkbox
+    auto_dispersion_checkbox.toggled.connect(auto_dispersion_spinbox.setEnabled)
+    auto_dispersion_checkbox.toggled.connect(inverse_dispersion_checkbox.setEnabled)
+    auto_dispersion_checkbox.toggled.connect(lambda checked: inverse_dispersion_checkbox.setChecked(False))
+
+    auto_dispersion_layout = QHBoxLayout()
+    auto_dispersion_layout.setContentsMargins(0, 0, 0, 0)
+    auto_dispersion_layout.addWidget(auto_dispersion_checkbox)
+    auto_dispersion_layout.addWidget(QLabel("Dispersion range:"))
+    auto_dispersion_layout.addWidget(auto_dispersion_spinbox)
+
+    auto_dispersion_widget = QWidget()
+    auto_dispersion_widget.setLayout(auto_dispersion_layout)
+
     desine_checkbox = QCheckBox("Desine")
     desine_checkbox.setChecked(False)
 
@@ -50,7 +76,8 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
         main_layout.addWidget(full_range_checkbox)
 
     if auto_dispersion_button:
-        main_layout.addWidget(auto_dispersion_checkbox)
+        main_layout.addWidget(auto_dispersion_widget)
+        main_layout.addWidget(inverse_dispersion_checkbox)
 
     if desine_button:
         main_layout.addWidget(desine_checkbox)
@@ -62,12 +89,12 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
 
     if result == QDialog.Accepted:
         return (True, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()))
+                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()))
     else:
         # checkbox has been reverted in _on_reject, so return that value
         return (False, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()))
-
+                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()))
+    
 def unp_get_reader(path):
     """Return a reader callable for .unp files, or None if the path is unsupported.
 
@@ -95,7 +122,9 @@ def unp_get_reader(path):
     """
     if isinstance(path, str) and path.endswith(".unp"):
         return unp_file_reader
+    
     return None
+
 
 
 def unp_proc_meta(path) -> unp_meta | None:
@@ -180,7 +209,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
             meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
 
-        status, _, meta.full_range, meta.auto_dispersion, meta.desine = xml_dialog(double_side_button=False)
+        status, _, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion = xml_dialog(double_side_button=False)
 
         if not status:
             return None
@@ -213,7 +242,7 @@ def unp_proc_meta(path) -> unp_meta | None:
         scanning_params_attrib = scanning_params.attrib # type: ignore
         meta.bmscan = int(scanning_params_attrib["Number_of_BM_scans"])
 
-        status, meta.double_side, meta.full_range, meta.auto_dispersion, meta.desine = xml_dialog()
+        status, meta.double_side, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion = xml_dialog()
         
         print("File Info")
         print(f"width: {meta.width}")
@@ -254,23 +283,22 @@ def unp_file_reader(path):
             default to layer_type=="image" if not provided
     """
 
+    # print(meta)
     meta = unp_proc_meta(path)
     if meta is None:
         show_info("No associated .ini or .xml meta data file found or process was cancelled. Cannot proceed.")
-        return None
-    
+        return [(None,)]
 
-    #TODO: Handle Vista Scans properly
 
-    #TODO: Handle OCTA
     # #does not support Sine_Pause pattern at the moment
     if meta.pattern == "Sine_Pause":
         display, display_hires = process_unp_sine_pause(Path(path), meta)
+        display_enface = np.mean(display, axis=-1)
 
         display = display.transpose(0,2,1)  # change from (depth, height, width) to (depth, width, height) for napari
         display_hires = display_hires.transpose(0,2,1)  # change from (depth, height, width) to (depth, width, height) for napari
-        
-        head, tail = ospath.split(path)
+
+        _, tail = ospath.split(path)
         file_name = tail.split(".")[0]
         add_kwargs = {"name": file_name}
         layer_type = "image"
@@ -278,17 +306,59 @@ def unp_file_reader(path):
         add_kwargs_hires = {"name": file_name + "_hires"}
         layer_type_hires = "image"
 
-        return [(display, add_kwargs, layer_type), (display_hires, add_kwargs_hires, layer_type_hires)]
+        add_kwargs_enface = {"name": file_name + "_enface"}
+        layer_type_enface = "image"
+
+        return [(display, add_kwargs, layer_type), (display_hires, add_kwargs_hires, layer_type_hires), (display_enface, add_kwargs_enface, layer_type_enface)]
     
     else:
 
         display = process_unp(Path(path), meta)
+        display = display.transpose(0,2,1)  # change from (depth, height, width1008) to (depth, width1008, height) for napari
 
-        display = display.transpose(0,2,1)  # change from (depth, height, width) to (depth, width, height) for napari
-
-        head, tail = ospath.split(path)
+        _, tail = ospath.split(path)
         file_name = tail.split(".")[0]
         add_kwargs = {"name": file_name}
         layer_type = "image"
 
-        return [(display, add_kwargs, layer_type)]
+        if meta.bmscan > 1:
+            #TODO: Handle Vista Scans properly
+            if meta.vista > 1:
+                show_info("Vista scan data detected. Rearranging frames...")
+                display = reshuffle_vista_frames(display, meta.vista, meta.bmscan)
+
+                if meta.double_side:
+                    for frame_num in range(display.shape[0]):
+                        cframe = int(np.floor(frame_num/(meta.bmscan)))
+                        if (cframe % 2): #flip every odd frame (1,3,5,...) python is zero indexed
+                            display[frame_num,:,:] = display[frame_num,:,::-1]
+            
+            else:
+                if meta.double_side:
+                    for frame_num in range(display.shape[0]):
+                        cframe = int(np.floor(frame_num/meta.bmscan))
+                        if (cframe % 2): #flip every odd frame (1,3,5,...) python is zero indexed
+                            display[frame_num,:,:] = display[frame_num,:,::-1]
+
+            show_info("OCTA data detected. Generating OCTA volume...")
+            octa_volume = generate_octa(display, mscans=meta.bmscan)
+            add_kwargs_octa = {"name": file_name + "_octa"}
+
+            add_kwargs_enface = {"name": file_name + "_enface"}
+            layer_type_enface = "image"
+
+            display_enface = np.mean(display, axis=1)
+            display_enface = resize(display_enface, (octa_volume.shape[0],octa_volume.shape[2]), anti_aliasing=True, preserve_range=True)
+
+            return [(display, add_kwargs, layer_type), (display_enface, add_kwargs_enface, layer_type_enface), (octa_volume, add_kwargs_octa, layer_type)]
+        
+        else:
+            add_kwargs_enface = {"name": file_name + "_enface"}
+            layer_type_enface = "image"
+
+            if meta.double_side:
+                display[1::2, :, :] = display[1::2, :, ::-1]
+
+            display_enface = np.mean(display, axis=1)
+
+            return [(display, add_kwargs, layer_type), (display_enface, add_kwargs_enface, layer_type_enface)]

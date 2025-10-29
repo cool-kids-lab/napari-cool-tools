@@ -1,5 +1,5 @@
 name: napari-cool-tools-img-proc
-display_name: Napari B-scan/Image Processing 
+display_name: COOL B-scan/Image Processing 
 contributions:
   commands:
     - id: napari-cool-tools-img-proc.init_bscan_preproc
@@ -64,6 +64,21 @@ contributions:
       title: Erosion(Morph)
       python_name: napari_cool_tools_img_proc._morphology:morphological_erosion_plugin
       category: Morphology
+    - id: napari-cool-tools-img-proc.resize_image
+      title:  Resize Image/Label
+      python_name: napari_cool_tools_img_proc._resize:resize_image_plugin
+    - id: napari-cool-tools-img-proc.shift_label
+      title: Shift Image/Label
+      python_name: napari_cool_tools_img_proc._shift:shift_image_plugin
+    - id: napari-cool-tools-img-proc.image_arithmetic
+      title: Image Arithmetic
+      python_name: napari_cool_tools_img_proc._image_arithmetic:image_arithmetic_plugin
+    - id: napari-cool-tools-img-proc.generate_logscaled_image
+      title: Generate Logscaled Image
+      python_name: napari_cool_tools_img_proc._log_scale:generate_logscaled_image_plugin
+    - id: napari-cool-tools-img-proc.flip_image
+      title: Flip Image/Label
+      python_name: napari_cool_tools_img_proc._flip_image:flip_image_plugin
 
   widgets:
     - command: napari-cool-tools-img-proc.init_bscan_preproc
@@ -122,4 +137,19 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-img-proc.morph_erosion
       display_name: Erosion(Morph)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.resize_image
+      display_name: Resize Image/Label
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.shift_label
+      display_name: Shift Image/Label
+      # autogenerate: true
+    - command: napari-cool-tools-img-proc.image_arithmetic
+      display_name: Image Arithmetic
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.generate_logscaled_image
+      display_name: Generate Logscaled Image
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.flip_image
+      display_name: Flip Image/Label
       autogenerate: true

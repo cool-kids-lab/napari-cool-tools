@@ -1,5 +1,5 @@
 name: napari-cool-tools-segmentation
-display_name: Napari COOL Tools Segmentation
+display_name: COOL Tools Segmentation
 contributions:
   commands:
     - id: napari-cool-tools-segmentation.onnx_bscan_seg

@@ -1,7 +1,4 @@
-try:
-    from ._version import version as __version__
-except ImportError:
-    __version__ = "unknown"
+__version__ = "0.0.1"
 
 __all__ = ()
 
@@ -29,6 +26,8 @@ class unp_meta:
     delay: int = 0
     sine_frame_indices: list = None # type: ignore
     sine_hires_ratio: int = 0
+    dispersion_range: int = 100
+    inverse_dispersion: bool = False
 
 def memory_stats():
     show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")
@@ -40,223 +39,209 @@ def memory_stats():
     if not gpu_mem_clear:
         print(f"{torch.cuda.memory_summary()}\n")
 
+# @napari.Viewer.bind_key("i")
+# def shortcut(viewer):
+#     # init layers and active selection
+#     layers = viewer.layers
+#     curr_sel = layers.selection
 
-@napari.Viewer.bind_key("i")
-def shortcut(viewer):
-    # init layers and active selection
-    layers = viewer.layers
-    curr_sel = layers.selection
+#     # check that label layer is selected
 
-    # check that label layer is selected
+#     # case only one layer is selected
+#     if len(curr_sel) == 1:
+#         # get current layer
+#         curr_layer = list(curr_sel)[0]
+#         curr_layer_type = curr_layer.as_layer_data_tuple()[2]
 
-    # case only one layer is selected
-    if len(curr_sel) == 1:
-        # get current layer
-        curr_layer = list(curr_sel)[0]
-        curr_layer_type = curr_layer.as_layer_data_tuple()[2]
+#         # set default opacity
+#         new_opacity = curr_layer.opacity
 
-        # set default opacity
-        new_opacity = curr_layer.opacity
+#         # case selected layer is a labels layer
+#         if curr_layer_type == "labels":
+#             # get current opacity
+#             opacity = curr_layer.opacity
 
-        # case selected layer is a labels layer
-        if curr_layer_type == "labels":
-            # get current opacity
-            opacity = curr_layer.opacity
+#             # case opacity is greater than 0
+#             if opacity > 0:
+#                 # increase opacity size
+#                 new_opacity = opacity - 0.1
 
-            # case opacity is greater than 0
-            if opacity > 0:
-                # increase opacity size
-                new_opacity = opacity - 0.1
+#                 if new_opacity < 0:
+#                     new_opacity = 0
+#                 else:
+#                     pass
 
-                if new_opacity < 0:
-                    new_opacity = 0
-                else:
-                    pass
+#                 curr_layer.opacity = new_opacity
 
-                curr_layer.opacity = new_opacity
+#                 # update viewer with mesage
+#                 msg = f"decrease opacity to {new_opacity}"
+#                 viewer.status = msg
 
-                # update viewer with mesage
-                msg = f"decrease opacity to {new_opacity}"
-                viewer.status = msg
+#             # case opacity is < 0
+#             else:
+#                 pass
 
-            # case opacity is < 0
-            else:
-                pass
+#         # case selected layer is not a labels layer
+#         else:
+#             pass
 
-        # case selected layer is not a labels layer
-        else:
-            pass
+#         pass
 
-        pass
-
-    # case multiple layers are selected
-    else:
-        pass
-
-
-@napari.Viewer.bind_key("o")
-def shortcut2(viewer):
-    # init layers and active selection
-    layers = viewer.layers
-    curr_sel = layers.selection
-
-    # check that label layer is selected
-
-    # case only one layer is selected
-    if len(curr_sel) == 1:
-        # get current layer
-        curr_layer = list(curr_sel)[0]
-        curr_layer_type = curr_layer.as_layer_data_tuple()[2]
-
-        # set default opacity
-        new_opacity = curr_layer.opacity
-
-        # case selected layer is a labels layer
-        if curr_layer_type == "labels":
-            # get current opacity
-            opacity = curr_layer.opacity
-
-            # case opacity is less than 1
-            if opacity < 1:
-                # increase opacity
-                new_opacity = opacity + 0.1
-
-                if new_opacity > 1:
-                    new_opacity = 1
-                else:
-                    pass
-
-                curr_layer.opacity = new_opacity
-
-                # update viewer with mesage
-                msg = f"increase opacity to {new_opacity}"
-                viewer.status = msg
-
-            # case opacity is >= 1
-            else:
-                pass
-
-        # case selected layer is not a labels layer
-        else:
-            pass
-
-        pass
-
-    # case multiple layers are selected
-    else:
-        pass
+#     # case multiple layers are selected
+#     else:
+#         pass
 
 
-@napari.Viewer.bind_key("[")
-def shortcut3(viewer):
-    # init layers and active selection
-    layers = viewer.layers
-    curr_sel = layers.selection
+# @napari.Viewer.bind_key("o")
+# def shortcut2(viewer):
+#     # init layers and active selection
+#     layers = viewer.layers
+#     curr_sel = layers.selection
 
-    # check that label layer is selected
+#     # check that label layer is selected
 
-    # case only one layer is selected
-    if len(curr_sel) == 1:
-        # get current layer
-        curr_layer = list(curr_sel)[0]
-        curr_layer_type = curr_layer.as_layer_data_tuple()[2]
+#     # case only one layer is selected
+#     if len(curr_sel) == 1:
+#         # get current layer
+#         curr_layer = list(curr_sel)[0]
+#         curr_layer_type = curr_layer.as_layer_data_tuple()[2]
 
-        # case selected layer is a labels layer
-        if curr_layer_type == "labels":
-            # get current brush size
-            brush_size = curr_layer.brush_size
+#         # set default opacity
+#         new_opacity = curr_layer.opacity
 
-            # case brush size is greater than 1
-            if brush_size > 1:
-                # case brush size is odd
-                if brush_size % 2 == 1:
-                    brush_size = brush_size - 1
+#         # case selected layer is a labels layer
+#         if curr_layer_type == "labels":
+#             # get current opacity
+#             opacity = curr_layer.opacity
 
-                # case brush size is even
-                else:
-                    pass
+#             # case opacity is less than 1
+#             if opacity < 1:
+#                 # increase opacity
+#                 new_opacity = opacity + 0.1
 
-                # decrease brush size
-                curr_layer.brush_size = brush_size - 1
+#                 if new_opacity > 1:
+#                     new_opacity = 1
+#                 else:
+#                     pass
 
-                # update viewer with mesage
-                msg = f"decrease brush size to {brush_size - 1}"
-                viewer.status = msg
+#                 curr_layer.opacity = new_opacity
 
-            # case brush size is <= 1
-            else:
-                pass
+#                 # update viewer with mesage
+#                 msg = f"increase opacity to {new_opacity}"
+#                 viewer.status = msg
 
-        # case selected layer is not a labels layer
-        else:
-            pass
+#             # case opacity is >= 1
+#             else:
+#                 pass
 
-        pass
+#         # case selected layer is not a labels layer
+#         else:
+#             pass
 
-    # case multiple layers are selected
-    else:
-        pass
+#         pass
 
-
-@napari.Viewer.bind_key("]")
-def shortcut4(viewer):
-    # init layers and active selection
-    layers = viewer.layers
-    curr_sel = layers.selection
-
-    # check that label layer is selected
-
-    # case only one layer is selected
-    if len(curr_sel) == 1:
-        # get current layer
-        curr_layer = list(curr_sel)[0]
-        curr_layer_type = curr_layer.as_layer_data_tuple()[2]
-
-        # case selected layer is a labels layer
-        if curr_layer_type == "labels":
-            # get current brush size
-            brush_size = curr_layer.brush_size
-
-            # case brush size is less than 40
-            if brush_size < 40:
-                # case brush size is even
-                if brush_size % 2 == 0:
-                    brush_size = brush_size + 1
-
-                # case brush size is odd
-                else:
-                    pass
-
-                # increase brush size
-                curr_layer.brush_size = brush_size + 1
-
-                # update viewer with mesage
-                msg = f"increase brush size to {brush_size + 1}"
-                viewer.status = msg
-
-            # case brush size is >= 40
-            else:
-                pass
-
-        # case selected layer is not a labels layer
-        else:
-            pass
-
-        pass
-
-    # case multiple layers are selected
-    else:
-        pass
+#     # case multiple layers are selected
+#     else:
+#         pass
 
 
-## specify list of modules that should be monitored
-# list_of_modules = ["napari","napari_cool_tools_img_proc" ,"napari_cool_tools_io","napari_cool_tools_oct_preproc","napari_cool_tools_registration","napari_cool_tools_segmentation","napari_cool_tools_vol_proc"]
-#
-# widget = QtReloadWidget(list_of_modules)
-#
-## add the widget to your application (or keep reference to it so it's not garbage collected)
-# qt_viewer = napari.qt.QtViewer(viewer)
-# qt_viewer.addWidget(widget)
-#
-# show_info(f"\n\nHOT RELOAD ACTIVATED!!\n\n")
-# print(f"\n\nHOT RELOAD ACTIVATED!!\n\n")
+# @napari.Viewer.bind_key("[")
+# def shortcut3(viewer):
+#     # init layers and active selection
+#     layers = viewer.layers
+#     curr_sel = layers.selection
+
+#     # check that label layer is selected
+
+#     # case only one layer is selected
+#     if len(curr_sel) == 1:
+#         # get current layer
+#         curr_layer = list(curr_sel)[0]
+#         curr_layer_type = curr_layer.as_layer_data_tuple()[2]
+
+#         # case selected layer is a labels layer
+#         if curr_layer_type == "labels":
+#             # get current brush size
+#             brush_size = curr_layer.brush_size
+
+#             # case brush size is greater than 1
+#             if brush_size > 1:
+#                 # case brush size is odd
+#                 if brush_size % 2 == 1:
+#                     brush_size = brush_size - 1
+
+#                 # case brush size is even
+#                 else:
+#                     pass
+
+#                 # decrease brush size
+#                 curr_layer.brush_size = brush_size - 1
+
+#                 # update viewer with mesage
+#                 msg = f"decrease brush size to {brush_size - 1}"
+#                 viewer.status = msg
+
+#             # case brush size is <= 1
+#             else:
+#                 pass
+
+#         # case selected layer is not a labels layer
+#         else:
+#             pass
+
+#         pass
+
+#     # case multiple layers are selected
+#     else:
+#         pass
+
+
+# @napari.Viewer.bind_key("]")
+# def shortcut4(viewer):
+#     # init layers and active selection
+#     layers = viewer.layers
+#     curr_sel = layers.selection
+
+#     # check that label layer is selected
+
+#     # case only one layer is selected
+#     if len(curr_sel) == 1:
+#         # get current layer
+#         curr_layer = list(curr_sel)[0]
+#         curr_layer_type = curr_layer.as_layer_data_tuple()[2]
+
+#         # case selected layer is a labels layer
+#         if curr_layer_type == "labels":
+#             # get current brush size
+#             brush_size = curr_layer.brush_size
+
+#             # case brush size is less than 40
+#             if brush_size < 40:
+#                 # case brush size is even
+#                 if brush_size % 2 == 0:
+#                     brush_size = brush_size + 1
+
+#                 # case brush size is odd
+#                 else:
+#                     pass
+
+#                 # increase brush size
+#                 curr_layer.brush_size = brush_size + 1
+
+#                 # update viewer with mesage
+#                 msg = f"increase brush size to {brush_size + 1}"
+#                 viewer.status = msg
+
+#             # case brush size is >= 40
+#             else:
+#                 pass
+
+#         # case selected layer is not a labels layer
+#         else:
+#             pass
+
+#         pass
+
+#     # case multiple layers are selected
+#     else:
+#         pass

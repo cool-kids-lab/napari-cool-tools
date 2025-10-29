@@ -11,9 +11,6 @@ contributions:
     - id: napari-cool-tools-vol-proc.project
       title: Projection (Orthogonal)
       python_name: napari_cool_tools_vol_proc._projection_tools:projection_plugin
-    - id: napari-cool-tools-vol-proc.mip
-      title: Maximum Intensity Projection (Orthogonal)
-      python_name: napari_cool_tools_vol_proc._projection_tools:mip
     - id: napari-cool-tools-vol-proc.circle_mask
       title: Draw Circle Mask (Center to Radius)
       python_name: napari_cool_tools_vol_proc._measuring_tools:draw_circle_mask
@@ -80,9 +77,6 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-vol-proc.project
       display_name: Projection (Orthogonal)
-      autogenerate: true
-    - command: napari-cool-tools-vol-proc.mip
-      display_name: MIP (Orthogonal)
       autogenerate: true
     - command: napari-cool-tools-vol-proc.circle_mask
       display_name: Draw Circle

@@ -1,11 +1,9 @@
 [workspace]
-authors = ["John Jackson <jdjacks@sbcglobal.net>"]
+authors = ["John Jackson <jdjacks@sbcglobal.net>", "Yakub Bayhaqi <yakub.rouge@gmail.com>"]
 channels = ["conda-forge"]
 name = "napari-cool-tools-plugins"
 platforms = ["linux-64", "win-64"]
 version = "0.1.0"
-
-[tasks]
 
 [dependencies]
 # We need a python version that is compatible with pytorch
@@ -24,6 +22,7 @@ napari-cool-tools-registration = { path = "napari-cool-tools-registration", edit
 napari-cool-tools-segmentation = { path = "napari-cool-tools-segmentation", editable = true }
 napari-cool-tools-vol-proc = { path = "napari-cool-tools-vol-proc", editable = true }
 napari-cool-tools-submenu-patch = { path = "napari-cool-tools-submenu-patch", editable = true }
+napari-plugin-manager = "*"
 kornia = "==0.8.*"
 flatbuffers = "==25.2.*"
 packaging = "==24.*"
@@ -33,30 +32,9 @@ ruamel-yaml = "==0.18.6"
 tomlkit = "==0.13.*"
 opencv-python = "==4.11.0.*"
 
-[feature.development]
-[feature.development.pypi-dependencies]
-segmentation-models-pytorch = "==0.4.0"
-tensorboard = "==2.19.0"
-notebook = "==7.4.3"
-lightning = "==2.4.*"
-#lightning = "==2.2.2"
-#lightning-utilities = "==0.11.2"
-onnx = "==1.16.2"
-qtreload = "==0.2.3"
-polars = "==1.31.*"
-imreg_dft = "==2.0.0"
-
-[feature.visualization]
-[feature.visualization.pypi-dependencies]
-#open3d = "==0.19.0"
-pypcd4 = "==1.2.1"
-#pptk = "==0.1.0"
-pyvista = "==0.45.*"
-pyvistaqt = "==0.11.*"
-openpyxl = "*"
-
 [feature.cuda12]
 system-requirements = { cuda = "12.0" }
+
 [feature.cuda12.pypi-dependencies]
 nvidia-cuda-runtime-cu12 = "==12.8.*"
 torch = { version = "==2.7.*", index = "https://download.pytorch.org/whl/cu128" }
@@ -69,7 +47,6 @@ tensorrt = "==10.2.*"
 tensorrt-cu12-libs = "==10.2.*"
 tensorrt-cu12-bindings = "==10.2.*"
 
-
 [feature.cpu.pypi-dependencies]
 torch = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = "==0.19.*", index = "https://download.pytorch.org/whl/cpu" }
@@ -77,12 +54,8 @@ torchaudio = { version = "==2.4.*", index = "https://download.pytorch.org/whl/cp
 onnxruntime = "==1.19.*, <2"
 
 [environments]
-dev = { features = ["development"]}
 cpu = { features = ["cpu"]}
 cuda12 = { features = ["cuda12"] }
-cpu-dev = { features =  ["development","cpu"] }
-#cuda12-dev = { features = ["development", "cuda12"] }
-cuda12-dev = { features = ["development", "cuda12", "visualization"] }
 
 [environments.default]
 features = ["cuda12"]
