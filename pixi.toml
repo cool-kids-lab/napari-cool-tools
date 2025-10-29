@@ -14,7 +14,7 @@ pip = ">=25.2,<26"
 numpy = "==1.23.5"
 PyQt5-Qt5 = "==5.15.2"
 PyQt5 = "==5.15.*"
-napari = "==0.5.4"
+napari = "==0.5.6"
 napari-cool-tools-img-proc = { path = "napari-cool-tools-img-proc", editable = true }
 napari-cool-tools-io = { path = "napari-cool-tools-io", editable = true }
 napari-cool-tools-oct-preproc = { path = "napari-cool-tools-oct-preproc", editable = true }
