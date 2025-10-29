@@ -10,6 +10,6 @@ def flip_image_plugin(
     if img.data.ndim < 3 and direction.value == 2:
         return  # No lateral axis to flip
 
-    img.data = np.flip(img.data, axis=direction.value)
+    img.data = np.flip(img.data, axis=direction.value).copy()
 
     return

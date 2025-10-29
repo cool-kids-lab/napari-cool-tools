@@ -66,8 +66,8 @@ def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
     
     # Remove DC component by subtracting the median spectrum
     # Subtract median (DC removal) along each spectrum (per column)
-    corrected_1 = corrected_1 - torch_like_numpy_median(corrected_1, dim=0, keepdim=True)
-    corrected_2 = corrected_2 - torch_like_numpy_median(corrected_2, dim=0, keepdim=True)
+    corrected_1 = corrected_1 - torch.mean(corrected_1, dim=0, keepdim=True)
+    corrected_2 = corrected_2 - torch.mean(corrected_2, dim=0, keepdim=True)
 
     # Recombine into full B-scan
     subtracted_signal = torch.zeros_like(data)
