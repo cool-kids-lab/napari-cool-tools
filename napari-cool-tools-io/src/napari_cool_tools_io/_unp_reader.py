@@ -39,16 +39,36 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
     inverse_dispersion_checkbox.setChecked(False)
     inverse_dispersion_checkbox.setEnabled(auto_dispersion_checkbox.isChecked())
 
+    c2_spinbox = QSpinBox()
+    c2_spinbox.setRange(0, 10000)
+    c2_spinbox.setSingleStep(1)
+    c2_spinbox.setValue(0)
+
+    c3_spinbox = QSpinBox()
+    c3_spinbox.setRange(0, 10000)
+    c3_spinbox.setSingleStep(1)
+    c3_spinbox.setValue(0)
+
+    manual_dispersion_layout = QHBoxLayout()
+    manual_dispersion_layout.setContentsMargins(0, 0, 0, 0)
+    manual_dispersion_layout.addWidget(QLabel("C2:"))
+    manual_dispersion_layout.addWidget(c2_spinbox)
+    manual_dispersion_layout.addWidget(QLabel("C3:"))
+    manual_dispersion_layout.addWidget(c3_spinbox)
+
     # add a spinbox next to the Auto Dispersion checkbox
     auto_dispersion_spinbox = QSpinBox()
     auto_dispersion_spinbox.setRange(0, 10000)
     auto_dispersion_spinbox.setSingleStep(1)
     auto_dispersion_spinbox.setValue(100)
     auto_dispersion_spinbox.setEnabled(auto_dispersion_checkbox.isChecked())
+    manual_dispersion_layout.setEnabled(not auto_dispersion_checkbox.isChecked())
 
     # keep spinbox enabled/disabled in sync with the checkbox
     auto_dispersion_checkbox.toggled.connect(auto_dispersion_spinbox.setEnabled)
     auto_dispersion_checkbox.toggled.connect(inverse_dispersion_checkbox.setEnabled)
+    auto_dispersion_checkbox.toggled.connect(c2_spinbox.setDisabled)
+    auto_dispersion_checkbox.toggled.connect(c3_spinbox.setDisabled)
     auto_dispersion_checkbox.toggled.connect(lambda checked: inverse_dispersion_checkbox.setChecked(False))
 
     auto_dispersion_layout = QHBoxLayout()
@@ -78,6 +98,7 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
     if auto_dispersion_button:
         main_layout.addWidget(auto_dispersion_widget)
         main_layout.addWidget(inverse_dispersion_checkbox)
+        main_layout.addLayout(manual_dispersion_layout)
 
     if desine_button:
         main_layout.addWidget(desine_checkbox)
@@ -89,12 +110,14 @@ def xml_dialog(parent=None, double_side_button=True, full_range_button=True, aut
 
     if result == QDialog.Accepted:
         return (True, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()))
+                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()),
+                 c2_spinbox.value(), c3_spinbox.value())
     else:
         # checkbox has been reverted in _on_reject, so return that value
         return (False, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()))
-    
+                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()),
+                 c2_spinbox.value(), c3_spinbox.value())
+
 def unp_get_reader(path):
     """Return a reader callable for .unp files, or None if the path is unsupported.
 
@@ -209,7 +232,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
             meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
 
-        status, _, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion = xml_dialog(double_side_button=False)
+        status, _, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion, meta.c2, meta.c3 = xml_dialog(double_side_button=False)
 
         if not status:
             return None
@@ -242,7 +265,7 @@ def unp_proc_meta(path) -> unp_meta | None:
         scanning_params_attrib = scanning_params.attrib # type: ignore
         meta.bmscan = int(scanning_params_attrib["Number_of_BM_scans"])
 
-        status, meta.double_side, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion = xml_dialog()
+        status, meta.double_side, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion, meta.c2, meta.c3 = xml_dialog()
         
         print("File Info")
         print(f"width: {meta.width}")

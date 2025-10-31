@@ -28,6 +28,8 @@ class unp_meta:
     sine_hires_ratio: int = 0
     dispersion_range: int = 100
     inverse_dispersion: bool = False
+    c2: int = 0
+    c3: int = 0
 
 def memory_stats():
     show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")

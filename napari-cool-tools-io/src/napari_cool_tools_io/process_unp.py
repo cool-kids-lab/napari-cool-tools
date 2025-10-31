@@ -327,7 +327,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
             dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,meta.dispersion_range)
             print(f"Dispersion coefficients: {dispCoeffs.squeeze().cpu().numpy()}")
         else:
-            dispCoeffs = torch.tensor([0 , 0], device=hamming_signal.device) #disable dispersion compensation
+            dispCoeffs = torch.tensor([meta.c2, meta.c3], device=hamming_signal.device) #disable dispersion compensation
 
         if meta.inverse_dispersion:
             dispCoeffs = -dispCoeffs
@@ -448,7 +448,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
         if meta.auto_dispersion:
             dispCoeffs = set_dispersion_coefficients_torch(hamming_signal,dispMaxOrder,meta.dispersion_range)
         else:
-            dispCoeffs = torch.tensor([0 , 0], device=hamming_signal.device) #disable dispersion compensation
+            dispCoeffs = torch.tensor([meta.c2, meta.c3], device=hamming_signal.device) #disable dispersion compensation
 
         if meta.inverse_dispersion:
             dispCoeffs = -dispCoeffs
