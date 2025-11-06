@@ -5,6 +5,15 @@ contributions:
     - id: napari-cool-tools-io.unp_get_reader
       python_name: napari_cool_tools_io._unp_reader:unp_get_reader
       title: Open .unp files
+    - id: napari-cool-tools-io.prof_get_reader
+      python_name: napari_cool_tools_io._prof_reader:prof_get_reader
+      title: Open .prof files
+    - id: napari-cool-tools-io.npy_get_reader
+      python_name: napari_cool_tools_io._npy_reader:npy_get_reader
+      title: Open .npy files
+    - id: napari-cool-tools-io.npy_get_writer
+      title: Save .npy files
+      python_name: napari_cool_tools_io._npy_writer:npy_get_writer
     # - id: napari-cool-tools-io.convert_unp_prof
     #   title: Convert unp to prof
     #   python_name: napari_cool_tools_io._import_unp:convert_unp_prof
@@ -13,6 +22,23 @@ contributions:
       accepts_directories: false
       filename_patterns:
       - '*.unp'
+    - command: napari-cool-tools-io.prof_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.prof'
+    - command: napari-cool-tools-io.npy_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.npy'
+  writers:
+    - command: napari-cool-tools-io.npy_get_writer
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      filename_extensions:
+      - .npy
+      display_name: Numpy File # shown in file save dialog
   # widgets:
   #   - command: napari-cool-tools-io.convert_unp_prof
   #     display_name: Convert UNP to Prof

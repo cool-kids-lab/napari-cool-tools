@@ -23,7 +23,8 @@ from qtpy.QtWidgets import (
 )
 from scipy.interpolate import interp1d
 from skimage.transform import resize
-
+import torch
+from napari_cool_tools_io import viewer, device
 
 # this is curve correction in 2D with cylindrical method
 def curve_correction(
@@ -33,30 +34,33 @@ def curve_correction(
     reference_arm_shift,
     scan_angle,
     n,
-    down_sample=False,
-    as_16bit=False,
+    down_sample_factor=1.0
 ) -> Generator[Image,Image,Image]:
-    def curve_correction_2D(image, coordinates_gpu, order):
-        data_gpu = cu.asarray(image)
-        data_gpu = map_coordinates(data_gpu, coordinates_gpu, order=order)
-
-        # retrieve data from gpu
-        new_image = cu.asnumpy(data_gpu)
-
-        return new_image
 
     show_info("Curve Correction in Progress.")
     data = image.data
     name = f"{image.name}_curve_corrected"
-    data[-1, :, :] = data[-2, :, :]  # delete last layer
 
     #################
     # curve correction 2D, This step is cylindrical coordinates convertion
     # pivot_point is in pixel
 
-    data = data.transpose((0, 2, 1))  # [840, 840,1024]
+    data = data.transpose((0, 2, 1))  # [840, 1024,800] to [840, 800,1024]
     output_size = np.min(data[:, :, 0].shape)
-    output_size_th = output_size * 2
+
+    ##############################
+    #main function to resize using torch
+    input_data = torch.Tensor(data).unsqueeze(0).unsqueeze(0).to(device)
+    data = torch.nn.functional.interpolate(
+    input_data, 
+    size=(output_size, output_size, data.shape[-1]),
+    mode='trilinear', 
+    align_corners=False
+    )
+    data = data.squeeze(0).squeeze(0)
+    ######################################
+
+    output_size_th = output_size * 2 #multiplie by 2 to improve resampling quality
     r = (
         np.linspace(0, output_size - 1, output_size) - output_size * 0.5 + 0.5
     )  # from 0 -> 839, don't put exactly at 0.0
@@ -65,32 +69,46 @@ def curve_correction(
 
     R, TH = np.meshgrid(r, th)
 
-    x = R * np.cos(TH)  # put it in the center of the original image
-    x = x + output_size * 0.5 - 0.5
-    y = R * np.sin(TH)  # we need to consider the unequally spaced pixel
-    y = y + output_size * 0.5 - 0.5
+    x = R * np.cos(TH) #X is range from -400.5 to 400.5
+    x = x / (output_size * 0.5) # Normalize to [-1, 1] for pytorch
+    y = R * np.sin(TH) #Y is range from -400.5 to 400.5
+    y = y / (output_size * 0.5) # Normalize to [-1, 1] for pytorch
 
     coordinates = np.array([x, y],dtype=np.float32)
-    coordinates_gpu = cu.asarray(coordinates)
 
-    output_image = np.zeros(
-        (output_size_th, output_size, data.shape[2]),dtype=np.float32
-    )  # [840, 840,1024]
+    # Convert coordinates to torch tensors
+    coords_torch = torch.from_numpy(coordinates).to(device)
+    
+    # Normalize coordinates to [-1, 1] range for grid_sample
+    coords_normalized = torch.stack([
+        coords_torch[1],  # y/theta coordinate
+        coords_torch[0]  # x/r coordinate
+    ], dim=-1)
+        
+    # Reshape for grid_sample: [1, H, W, 2]
+    coords_normalized = coords_normalized.unsqueeze(0)
 
-    for fnum in range(0, data.shape[2]):  # 1024 iteration
-        image = data[:, :, fnum]
-        image = resize(image, (output_size, output_size), order=3)  # this is important
-        image_gpu = cu.asarray(image)
+    output_image = torch.zeros(
+        (output_size_th, output_size, data.shape[2]),dtype=torch.float32, device=device
+    )
 
-        new_image = map_coordinates(
-            image_gpu, coordinates_gpu, order=1
-        )  # avoid oversample
-        new_image = cu.asnumpy(new_image)
-
-        output_image[:, :, fnum] = new_image  # only take the last half
+    for fnum in range(0, data.shape[-1]):  # 1024 iteration
+        image_torch = data[:, :, fnum]
+        
+        # Apply grid_sample (torch equivalent of map_coordinates)
+        new_image = torch.nn.functional.grid_sample(
+            image_torch.unsqueeze(0).unsqueeze(0),
+            coords_normalized,
+            mode='bilinear',
+            align_corners=True
+        )
+        
+        new_image = new_image.squeeze(0).squeeze(0)
+        output_image[:, :, fnum] = new_image
         yield 1
 
-    output_image = output_image.transpose((0, 2, 1))  # [840, 1024, 840]
+    # output_image = output_image.cpu().numpy()
+    # output_image = output_image.transpose((0, 2, 1))  #[840,800,1024] to [840, 1024, 840]
     data = output_image
 
     #################
@@ -101,7 +119,7 @@ def curve_correction(
     imaging_range = imaging_range / n  # the imaging range
     print("imaging_range")
     print(imaging_range)
-    pixel_spacing = imaging_range / data.shape[1]
+    pixel_spacing = imaging_range / data.shape[-1]
 
     pivot_point = pivot_point  # this is the reference pivot point, this is constant
     reference_arm_shift = (
@@ -115,17 +133,17 @@ def curve_correction(
 
     padding_pixel = int(padding / pixel_spacing)
 
-    radius = data.shape[1] + padding_pixel
-    resolution = radius * 2
+    radius = data.shape[-1] + padding_pixel
+    resolution = np.round(radius * down_sample_factor).astype(int)
 
     # grid for the target image
-    x = np.linspace(0, radius * 2, resolution)
-    y = np.linspace(0, radius * 2, resolution)
+    x = np.linspace(0, radius, resolution)
+    y = np.linspace(0, radius * 2, resolution*2)
     X, Y = np.meshgrid(x, y)
 
     # center the target
-    X = X - radius
-    Y = Y - radius
+    X = X# - radius #[-radius,+radius]
+    Y = Y - radius#[0,+radius]
 
     # this is the location in the image in polar corrdinates
     new_r = np.sqrt(X * X + Y * Y)
@@ -136,62 +154,76 @@ def curve_correction(
     new_r[np.isnan(new_r)] = 0
 
     # Build ranges for function in polar coordinates
-    num_theta = data.shape[2]
+    num_theta = data.shape[1]
 
     r = np.linspace(0, radius - 1, radius)
-    angle = 0.5 * scan_angle
-    # angle = np.arcsin(np.sin(0.5*scan_angle/180*np.pi)/n)*180/np.pi
+    angle = 0.5 * scan_angle #TODO theorically scan angle should be recalculated for each scan (see paper)
     th = np.linspace(-angle / 180 * np.pi, angle / 180 * np.pi, num_theta)
 
     # interpolate the target location in the image polar coordinates
     ir = interp1d(
-        r, np.arange(len(r)), bounds_error=False, fill_value=-1.0, kind="linear"
+        r, np.arange(len(r)), bounds_error=False, fill_value=-radius, kind="linear"
     )
     ith = interp1d(
-        th, np.arange(len(th)), bounds_error=False, fill_value=-1.0, kind="linear"
+        th, np.arange(len(th)), bounds_error=False, fill_value=-num_theta, kind="linear"
     )
-    new_ir = ir(new_r)
-    new_ith = ith(new_th)
+    new_ir = ir(new_r) #this is now in image index 0 -> radius (1024)
+    #normalize new_ir to [-1, 1] for torch
+    new_ir = (new_ir / (radius - 1)) * 2 - 1
 
-    top_image = int(padding_pixel * np.cos(angle / 180 * np.pi))
-    right_image = radius - int(radius * np.sin(angle / 180 * np.pi))
+    new_ith = ith(new_th) #this is now in image index 0 -> num_theta (800)
+    #normalize new_ith to [-1, 1] for torch
+    new_ith = (new_ith / (num_theta - 1)) * 2 - 1
 
-    output_image = np.zeros(
-        (data.shape[0], int(resolution / 2) - top_image, resolution),dtype=np.float32
-    )
+    top_image = int(0.5*padding_pixel * np.cos(angle / 180 * np.pi))
 
-    coordinates = np.array([new_ir, new_ith],dtype=np.float32)
-    coordinates_gpu = cu.asarray(coordinates)
+    output_image = np.zeros((data.shape[0], resolution*2, resolution - top_image),dtype=np.float32)
 
-    for frame, image in enumerate(data):  # 840 iteration
-        image = np.pad(
-            image, ((padding_pixel, 0), (0, 0)), mode="constant", constant_values=0
+    coordinates = np.array([new_ith, new_ir],dtype=np.float32) # [_,800,1024]
+    # coordinates_gpu = cu.asarray(coordinates)
+
+    # Convert coordinates to torch tensors
+    coords_torch = torch.from_numpy(coordinates).to(device)
+    coords_normalized = torch.stack([
+        coords_torch[1],  # y/theta coordinate
+        coords_torch[0]  # x/r coordinate
+    ], dim=-1)
+        
+    # Reshape for grid_sample: [1, H, W, 2]
+    coords_normalized = coords_normalized.unsqueeze(0)
+
+    for frame, image_torch in enumerate(data):  # 840 iteration
+
+        # Pad the image_torch tensor to match the padding applied to the numpy array
+        image_torch = torch.nn.functional.pad(
+            image_torch, 
+            (padding_pixel, 0, 0, 0), 
+            mode='constant', 
+            value=0
         )
-        image = curve_correction_2D(image, coordinates_gpu, order=1)
-        image = image.T
-        output_image[frame] = image[int(resolution / 2) + top_image :, :]
+
+        # Apply grid_sample (torch equivalent of map_coordinates)
+        new_image = torch.nn.functional.grid_sample(
+            image_torch.unsqueeze(0).unsqueeze(0),
+            coords_normalized,
+            mode='bilinear',
+            padding_mode='zeros',
+            align_corners=True
+        )
+
+        new_image = new_image.squeeze(0).squeeze(0).cpu().numpy()
+        output_image[frame] = new_image[:, top_image:]
         yield 1
 
-    # top_image = int(padding_pixel*np.cos(angle/180*np.pi))
-    # output_image = output_image[:,:,:]#[840, 1024, 1024*2]
-    # output_image = output_image.transpose((1, 2, 0))#[1024, 840, 840]
-    # data = output_image
+    right_image = int(0.5*radius - (0.5 * radius * np.sin(angle / 180 * np.pi)))
 
-    #     output_image = output_image.transpose((1, 2, 0))#[1024, 840, 840]
-
-    top_image = int(padding_pixel * np.cos(angle / 180 * np.pi))
-    print(top_image)
-    right_image = radius - int(radius * np.sin(angle / 180 * np.pi))
-    print(right_image)
-    output_image = output_image[:, :, right_image:-right_image]
-
-    output_image = output_image.transpose((1, 2, 0))  # [1024, 840, 840]
-
+    output_image = output_image[:, right_image:-right_image, :]
+    output_image = output_image.transpose((2, 1, 0))  # [800, 800, 1024] -> [1024, 800, 800]
     data = output_image
 
     #############################
     # put it back to cartesian
-    output_size = data.shape[1]
+    output_size = data.shape[1] # 800
 
     x = np.linspace(0, output_size - 1, output_size)
     y = np.linspace(0, output_size - 1, output_size)
@@ -199,96 +231,91 @@ def curve_correction(
     # this is the target coordinates
     X, Y = np.meshgrid(x, y)
 
-    X = X - output_size * 0.5 + 0.5
-    Y = Y - output_size * 0.5 + 0.5
+    X = X - output_size * 0.5 + 0.5 #center at 0 [-400.5,400.5]
+    Y = Y - output_size * 0.5 + 0.5 #center at 0 [-400.5,400.5]
 
     # this is the new target location
-    new_r = np.sign(Y + 0.1) * np.sqrt(X * X + Y * Y)  # this is always positive
+    new_r = np.sign(Y + 0.1) * np.sqrt(X * X + Y * Y)  #put sign to avoid all positive
     new_th = np.arctan2(Y, X)  # [avoid negative angle]
     new_th = np.mod(new_th, np.pi)
     new_th[np.isnan(new_th)] = 0
 
     # This is location in the polar image
     num_r = data.shape[1]  # [840]
-    num_theta = data.shape[2] * 2  # 840*2
+    num_theta = data.shape[2]*2  # 840 multiply by 2 for better quality
 
     r = (
-        np.linspace(0, num_r - 1, num_r) - output_size * 0.5 + 0.5
-    )  # from 0 -> 839, don't put exactly at 0.0
-    # th = np.linspace(0, np.pi, num_theta)
+        np.linspace(0, num_r - 1, num_r) - num_r * 0.5 + 0.5 #[-400.5,400.5]
+    )
 
-    # r = np.linspace(0, num_r - 1, num_r) - output_size*0.5#from 0 -> 839
     th = np.linspace(0, num_theta, num_theta)
-    th = np.pi * th / num_theta
+    th = np.pi * th / num_theta # 180 degree scan
 
     ir = interp1d(
-        r, np.arange(len(r)), bounds_error=False, fill_value=-1.0, kind="linear"
+        r, np.arange(len(r)), bounds_error=False, fill_value=-num_r, kind="linear"
     )
     ith = interp1d(
-        th, np.arange(len(th)), bounds_error=False, fill_value=-1.0, kind="linear"
+        th, np.arange(len(th)), bounds_error=False, fill_value=-num_theta, kind="linear"
     )
 
     new_ir = ir(new_r)
+    #normalize new_ir to [-1, 1] for torch
+    new_ir = (new_ir / (num_r - 1)) * 2 - 1
+
     new_ith = ith(new_th)
+    #normalize new_ith to [-1, 1] for torch
+    new_ith = (new_ith / (num_theta - 1)) * 2 - 1
 
     coordinates = np.array([new_ir, new_ith],dtype=np.float32)
-    coordinates_gpu = cu.asarray(coordinates)
+
+    # Convert coordinates to torch tensors
+    coords_torch = torch.from_numpy(coordinates).to(device)
+    coords_normalized = torch.stack([
+        coords_torch[1],  # y/theta coordinate
+        coords_torch[0]  # x/r coordinate
+    ], dim=-1)
+        
+    # Reshape for grid_sample: [1, H, W, 2]
+    coords_normalized = coords_normalized.unsqueeze(0)
 
     output_image = np.zeros((data.shape[0], output_size, output_size),dtype=np.float32)
+
     for fnum in range(0, data.shape[0]):  # 1024 iteration
         image = data[fnum, :, :]
-        image = resize(image, (num_r, num_theta), order=3)  # this is important
 
-        image_gpu = cu.asarray(image)
+        image_torch = torch.Tensor(image).unsqueeze(0).unsqueeze(0).to(device)
+        image_torch = torch.nn.functional.interpolate(
+            image_torch,
+            size=(num_r, num_theta),
+            mode='bilinear',
+            align_corners=False
+        )
 
-        new_image = map_coordinates(
-            image_gpu, coordinates_gpu, order=1
-        )  # avoid oversample
-        new_image = cu.asnumpy(new_image)
+        # Apply grid_sample (torch equivalent of map_coordinates)
+        new_image = torch.nn.functional.grid_sample(
+            image_torch,
+            coords_normalized,
+            mode='bilinear',
+            align_corners=True
+        )
 
-        output_image[fnum, :, :] = new_image
+        new_image = new_image.squeeze(0).squeeze(0)
+        output_image[fnum,:,:] = new_image.cpu().numpy()
         yield 1
 
-    output_image = output_image.transpose((2, 0, 1))
+    output_image = output_image.transpose((2, 0, 1))  # [1024, 800, 800] -> [800, 1024, 800]
 
     add_kwargs = {"name": name}
     layer_type = "image"
     new_layer = Layer.create(output_image, add_kwargs, layer_type)
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
     show_info("Curve Correction is Finished.")
 
     return new_layer
-
-
-def downsample_image(image, downsample_factor):
-    show_info("Down Sampling in Progress.")
-
-    name = f"{image.name}_downsampled"
-
-    output_image = scipy.ndimage.zoom(image.data, downsample_factor)
-
-    add_kwargs = {"name": name}
-    layer_type = "image"
-    new_layer = Layer.create(output_image, add_kwargs, layer_type)
-
-    show_info("Down Sampling is Finished.")
-
-    return new_layer
-
-
-def saveas_numpy(data, fname):
-    show_info("Save as Numpy Started.")
-    with open(fname, "wb") as f:
-        np.save(f, data)
-
-    show_info("Save as Numpy Finished.")
-
-
-def saveas_bigtiff(current_layer, fname, save_as_16bit=False):
-    show_info("Save as TIFF Started.")
-
-    tifffile.imwrite(fname, current_layer.data, bigtiff=True)
-
 
 class Curve_Correction_Widget(QWidget):
     def __init__(self, napari_viewer: "napari.viewer.Viewer"):
@@ -364,18 +391,6 @@ class Curve_Correction_Widget(QWidget):
         self.scan_angle.setValue(140.0)
         self.layout().addWidget(self.scan_angle)
 
-        self.curve_button = QPushButton("Correct Curve")
-        self.layout().addWidget(self.curve_button)
-        self.curve_button.clicked.connect(self.on_curve_button_clicked)
-
-        self.as16bit_checkbx = QCheckBox("As 16bit")
-        self.as16bit_checkbx.setChecked(False)
-        self.layout().addWidget(self.as16bit_checkbx)
-
-        self.auto_downsample = QCheckBox("Downsample")
-        self.auto_downsample.setChecked(False)
-        self.layout().addWidget(self.auto_downsample)
-
         # this is just a dummy function to initialize a worker thread
         dummy_function = lambda: 10
         self.worker = create_worker(dummy_function)
@@ -392,130 +407,10 @@ class Curve_Correction_Widget(QWidget):
         self.downsample_factor.setValue(0.5)
         self.layout().addWidget(self.downsample_factor)
 
-        self.downsample_button = QPushButton("Downsample")
-        self.layout().addWidget(self.downsample_button)
-        self.downsample_button.clicked.connect(self.on_downsample_button_clicked)
+        self.curve_button = QPushButton("Correct Curve")
+        self.layout().addWidget(self.curve_button)
+        self.curve_button.clicked.connect(self.on_curve_button_clicked)
 
-        self.savenumpy_button = QPushButton("Save as numpy")
-        self.layout().addWidget(self.savenumpy_button)
-        self.savenumpy_button.clicked.connect(self.on_savenumpy_button_clicked)
-
-        self.savetiff_button = QPushButton("Save as tiff")
-        self.layout().addWidget(self.savetiff_button)
-        self.savetiff_button.clicked.connect(self.on_savetiff_button_clicked)
-
-        self.save16bit_checkbox = QCheckBox("Save as 16bit")
-        self.save16bit_checkbox.setChecked(False)
-        self.layout().addWidget(self.save16bit_checkbox)
-
-    def on_savetiff_button_clicked(self):
-        if self.worker.is_running:
-            show_info("A Curve Correction process is running. Please Wait!")
-            return
-
-        # check if an image is opened
-        if len(self.viewer.layers) == 0:
-            show_info("No Image layer. Please open an image.")
-            return
-
-        # #check if a layers shape is selected, otherwise throw warning.
-        current_layer = self.viewer.layers.selection.active
-
-        if current_layer is None:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        if isinstance(current_layer, Image) is False:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        name = f"{current_layer.name}.tif"
-        fileName, filters = QFileDialog.getSaveFileName(
-            self, "Save File", name, "TIFF File (*.tif)"
-        )
-
-        if len(fileName) == 0:
-            return
-
-        progress_bar = progress()
-        progress_bar.set_description("Save as TIFF")
-        progress_bar.display()
-
-        self.worker = create_worker(
-            saveas_bigtiff, current_layer, fileName, self.save16bit_checkbox.isChecked()
-        )
-        self.worker.returned.connect(progress_bar.close)
-        self.worker.start()
-
-    def on_savenumpy_button_clicked(self):
-        if self.worker.is_running:
-            show_info("A Curve Correction process is running. Please Wait!")
-            return
-
-        # check if an image is opened
-        if len(self.viewer.layers) == 0:
-            show_info("No Image layer. Please open an image.")
-            return
-
-        # #check if a layers shape is selected, otherwise throw warning.
-        current_layer = self.viewer.layers.selection.active
-
-        if current_layer is None:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        if isinstance(current_layer, Image) is False:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        name = f"{current_layer.name}.npy"
-        fileName, filters = QFileDialog.getSaveFileName(
-            self, "Save File", name, "Numpy Array (*.npy)"
-        )
-
-        progress_bar = progress()
-        progress_bar.set_description("Save as Numpy")
-        progress_bar.display()
-
-        data = current_layer.data
-        self.worker = create_worker(saveas_numpy, data, fileName)
-        self.worker.returned.connect(progress_bar.close)
-        self.worker.start()
-
-    def on_downsample_button_clicked(self):
-        if self.worker.is_running:
-            show_info("A Curve Correction process is running. Please Wait!")
-            return
-
-        # check if an image is opened
-        if len(self.viewer.layers) == 0:
-            show_info("No Image layer. Please open an image.")
-            return
-
-        # #check if a layers shape is selected, otherwise throw warning.
-        current_layer = self.viewer.layers.selection.active
-
-        if current_layer is None:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        if isinstance(current_layer, Image) is False:
-            show_info("No Image is selected. Please select an image layer.")
-            return
-
-        # total = current_layer.data.shape[0] + current_layer.data.shape[1]
-        progress_bar = progress()
-        progress_bar.set_description("Down Sampling Image(s)")
-        progress_bar.display()
-
-        self.worker = create_worker(
-            downsample_image, current_layer, self.downsample_factor.value()
-        )
-        self.worker.returned.connect(self.viewer.add_layer)
-        # self.worker.yielded.connect(progress_bar.update)
-        self.worker.returned.connect(progress_bar.close)
-
-        self.worker.start()
 
     def on_curve_button_clicked(self):
         if self.worker.is_running:
@@ -580,8 +475,7 @@ class Curve_Correction_Widget(QWidget):
             reference_arm_shift / 1000,
             scan_angle,
             n,
-            self.auto_downsample.isChecked(),
-            self.as16bit_checkbx.isChecked(),
+            self.downsample_factor.value()
         )
 
         self.worker.returned.connect(self.viewer.add_layer)

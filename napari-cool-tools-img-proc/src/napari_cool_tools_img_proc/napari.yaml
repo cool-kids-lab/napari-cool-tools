@@ -67,6 +67,9 @@ contributions:
     - id: napari-cool-tools-img-proc.resize_image
       title:  Resize Image/Label
       python_name: napari_cool_tools_img_proc._resize:resize_image_plugin
+    - id: napari-cool-tools-img-proc.downsample_image
+      title:  Downsample Image/Label
+      python_name: napari_cool_tools_img_proc._downsample:downsample_image_plugin
     - id: napari-cool-tools-img-proc.shift_label
       title: Shift Image/Label
       python_name: napari_cool_tools_img_proc._shift:shift_image_plugin
@@ -140,6 +143,9 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-img-proc.resize_image
       display_name: Resize Image/Label
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.downsample_image
+      display_name: Downsample Image/Label
       autogenerate: true
     - command: napari-cool-tools-img-proc.shift_label
       display_name: Shift Image/Label

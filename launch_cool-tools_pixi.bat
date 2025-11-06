@@ -4,6 +4,6 @@
 
 pushd %~dp0
 
-echo: &echo running napari using Pixi and UV &echo:
+echo: &echo Opening napari using Pixi and UV. Please wait... &echo:
 call pixi run napari
 

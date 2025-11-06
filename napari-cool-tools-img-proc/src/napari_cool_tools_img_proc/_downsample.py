@@ -4,36 +4,30 @@ from napari.qt.threading import thread_worker
 from napari_cool_tools_io import viewer, device
 from napari.utils.notifications import show_info
 
-def resize_image_plugin(
+def downsample_image_plugin(
     img: Image,
-    xscale: float = 1,
-    yscale: float = 1,
-    zscale: float = 1,
+    scale: float = 1
 ):
-    """resize OCT volume.
+    """Downsample OCT volume for all dimensions.
 
     Args:
         vol (Image): 3D ndarray representing structural OCT data
-        xscale (float): scale in x direction
-        yscale (float): scale in y direction
-        zscale (float): scale in z direction
+        scale (float): scale factor for all dimensions
 
     Returns:
         Resized image
 
     """
-    resize_image_thread(img=img, xscale=xscale,yscale=yscale, zscale=zscale)
+    downsample_image_thread(img=img, scale=scale)
 
     return
 
 @thread_worker(connect={"yielded": viewer.add_layer})
-def resize_image_thread(
+def downsample_image_thread(
     img: Image,
-    xscale: float = 1,
-    yscale: float = 1,
-    zscale: float = 1,
+    scale: float = 1,
 ):
-    show_info("Resizing image")
+    show_info("Downsampling image")
 
     if len(img.data.shape) == 3:
         name = f"{img.name}_resized"
@@ -44,7 +38,7 @@ def resize_image_thread(
         input_data = torch.Tensor(img.data).unsqueeze(0).unsqueeze(0).to(device)
         output_image = torch.nn.functional.interpolate(
             input_data, 
-            scale_factor=(zscale, yscale, xscale), 
+            scale_factor=(scale, scale, scale), 
             #size=target_size,        # explicit output size
             mode='trilinear', 
             align_corners=False

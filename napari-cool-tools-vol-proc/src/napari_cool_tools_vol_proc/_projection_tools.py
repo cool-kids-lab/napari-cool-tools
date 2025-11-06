@@ -16,6 +16,7 @@ def projection_plugin(
     img: Layer,
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
+    crop: int = 10,
 ):
     """Generate projection along selected axis from structural OCT data.
 
@@ -31,7 +32,7 @@ def projection_plugin(
         ValueError: If data dimension is not == 3
     """
 
-    projection_thread(img=img, axis=axis, projection_type=projection_type)
+    projection_thread(img=img, axis=axis, projection_type=projection_type, crop=crop)
 
     return
 
@@ -41,6 +42,7 @@ def projection_thread(
     img: Layer,
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
+    crop: int = 0,
 ):
     """Generate projection along selected axis from structural OCT data.
 
@@ -71,7 +73,7 @@ def projection_thread(
     layer_type = img.as_layer_data_tuple()[2]
 
     show_info(f"{axis_suffix.capitalize()} Projection thread has started")
-    data = projection(data=data, axis=axis.value, projection_type=projection_type.value)
+    data = projection(data=data, axis=axis.value, projection_type=projection_type.value, crop=crop)
     layer = Layer.create(data, add_kwargs, layer_type)
 
     show_info(f"{axis_suffix.capitalize()} Projection thread has completed")

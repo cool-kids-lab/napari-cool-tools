@@ -4,12 +4,14 @@ This module contains code for calculating and manipulating projections of volume
 
 from napari.types import ImageData
 from napari_cool_tools_vol_proc import ProjectionDir, ProjectionType
+import numpy as np
 
 def projection(
     data: ImageData,
     projection_type: int = ProjectionType.MAX.value,
     axis: int = ProjectionDir.EN_FACE.value,
-) -> ImageData:
+    crop: int = 0,
+) -> ImageData: # type: ignore
     """Generate projection along selected axis from structural OCT data.
 
     Args:
@@ -28,6 +30,9 @@ def projection(
         f"Input has {data.ndim} dimensions but this function requires 3 dimensions."
     )
 
+    if crop > 0 and axis == ProjectionDir.EN_FACE.value:
+        data = data[:,crop:-crop,:] # type: ignore
+        
     if projection_type == ProjectionType.MAX.value:
         return data.max(axis=axis)
     if projection_type == ProjectionType.MEAN.value:

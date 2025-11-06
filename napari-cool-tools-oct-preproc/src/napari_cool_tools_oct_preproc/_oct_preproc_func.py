@@ -3,7 +3,7 @@ import math
 import torch.nn.functional as F
 from napari_cool_tools_oct_preproc import Operation
 
-def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
+def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 1) -> torch.Tensor:
     def desine_torch_2D(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
         """
         Regrid a 2D array from sine-spaced samples to uniform (linspace) along the chosen axis.
@@ -54,7 +54,7 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> to
 
         return y
 
-    def desine_torch_3d(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
+    def desine_torch_3d(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 1) -> torch.Tensor:
         """
         Regrid a 3D volume from sine-spaced samples to uniform (linspace)
         along the chosen axis (0, 1, or 2).
@@ -68,35 +68,90 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> to
             3D tensor [D, H, W] after resampling to uniform spacing.
         """
         # move to float32 for F.grid_sample
-        x = frame
 
-        # permute so sine-axis becomes last (W)
+                    # permute so sine-axis becomes last (W)
         if transpose:
-            x = x.permute(0, 2, 1)  # H,W,D
+            frame = frame.permute(0, 2, 1)  # H,W,D [800,800,1024] -> [800,1024,800]
 
-        D, H, W = x.shape  # now W is sine-sampled axis
+        y = torch.zeros_like(frame)
 
-        # add batch/channel dims: [N,C,D,H,W]
-        x = x.unsqueeze(0).unsqueeze(0)
+        for i, x in enumerate(frame):
 
-        Wm1 = float(W - 1)
-        j = torch.linspace(0.0, Wm1, W, device=frame.device)
-        arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)
-        arg = torch.clamp(arg, -1.0, 1.0)
-        theta = torch.arcsin(arg)
-        n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)
-        grid_x = (2.0 * n_src / Wm1) - 1.0  # normalized [-1,1]
+            # add batch/channel dims: [N,C,H,W]
+            x = x.unsqueeze(0).unsqueeze(0)
 
-        # create full 3D grid (Z,Y,X)
-        grid_z = torch.linspace(-1.0, 1.0, D, device=frame.device)
-        grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device)
-        grid_z, grid_y, grid_x = torch.meshgrid(grid_z, grid_y, grid_x, indexing="ij")
-        grid = torch.stack((grid_x, grid_y, grid_z), dim=-1).unsqueeze(0)  # [1,D,H,W,3]
+            #up sample image
+            x = torch.nn.functional.interpolate(
+                x,
+                scale_factor=(1.0, scale_fac),  # explicit output size
+                mode='bilinear',
+                align_corners=False
+            )
 
-        # trilinear sampling
-        y = F.grid_sample(
-            x, grid, mode="bilinear", padding_mode="zeros", align_corners=True
-        ).squeeze(0).squeeze(0)  # [D,H,W]
+            _,_,H, W = x.shape  # now W is sine-sampled axis
+
+            # --- Build inverse mapping from uniform output index j -> sine-sampled source index n_src ---
+            # grid_sample with align_corners=True interprets indices in [0..W-1] mapped to [-1..1] by:  g = 2*i/(W-1)-1
+            Wm1 = float(W - 1)
+            j = torch.linspace(0.0, Wm1, W, device=frame.device)                  # uniform target coords
+            # inverse of: y_org = (Wm1/2) * sin(theta) + (Wm1/2), with theta = (pi/Wm1)*n - pi/2
+            # Solve for n given y=j:
+            arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)                             # in [-1, 1]
+            arg = torch.clamp(arg, -1.0, 1.0)                               # numeric safety
+            theta = torch.arcsin(arg)                                       # [-pi/2, pi/2]
+            n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)               # source index in [0..W-1]
+            grid_x = (2.0 * n_src / Wm1) - 1.0                              # normalize to [-1, 1]
+
+            # Tile across rows; y stays linear (identity)
+            grid_x = grid_x.unsqueeze(0).repeat(H, 1)                       # [H, W]
+            grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device).unsqueeze(1).repeat(1, W)  # [H, W]
+            grid = torch.stack((grid_x, grid_y), dim=-1).unsqueeze(0)       # [1, H, W, 2]
+
+            # Sample (bilinear = linear along each axis; zeros outside)
+            x = F.grid_sample(
+                x, grid, mode=mode, padding_mode="zeros", align_corners=True
+            )
+
+            #down sample image
+            x = torch.nn.functional.interpolate(
+                x,
+                scale_factor=(1.0, 1.0/scale_fac),  # explicit output size
+                mode='bilinear',
+                align_corners=False
+            )
+
+            y[i] = x.squeeze(0).squeeze(0)  # [D,H,W]
+
+        # _,_,D, H, W = x.shape  # now W is sine-sampled axis
+
+        # Wm1 = float(W - 1)
+        # j = torch.linspace(0.0, Wm1, W, device=frame.device)
+        # arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)
+        # arg = torch.clamp(arg, -1.0, 1.0)
+        # theta = torch.arcsin(arg)
+        # n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)
+        # grid_x = (2.0 * n_src / Wm1) - 1.0  # normalized [-1,1]
+
+        # # create full 3D grid (Z,Y,X)
+        # grid_z = torch.linspace(-1.0, 1.0, D, device=frame.device)
+        # grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device)
+        # grid_z, grid_y, grid_x = torch.meshgrid(grid_z, grid_y, grid_x, indexing="ij")
+        # grid = torch.stack((grid_x, grid_y, grid_z), dim=-1).unsqueeze(0)  # [1,D,H,W,3]
+
+        # # bilinear sampling
+        # y = F.grid_sample(
+        #     x, grid, mode=mode, padding_mode="zeros", align_corners=True
+        # )
+
+        # #down sample image
+        # y = torch.nn.functional.interpolate(
+        #     x,
+        #     scale_factor=(1.0, 1.0, 1.0/scale_fac),  # explicit output size
+        #     mode='trilinear',
+        #     align_corners=False
+        # )
+        
+        # y = y.squeeze(0).squeeze(0)  # [D,H,W]
 
         # undo permutation
         if transpose:
@@ -105,9 +160,9 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> to
         return y
 
     if frame.dim() == 2:
-        return desine_torch_2D(frame, mode, transpose)
+        return desine_torch_2D(frame, mode=mode, transpose=transpose)
     elif frame.dim() == 3:
-        return desine_torch_3d(frame, mode, transpose)
+        return desine_torch_3d(frame, mode=mode, transpose=transpose, scale_fac=scale_fac)
 
 from napari_cool_tools_io import device
 from napari_cool_tools_oct_preproc import OCTACalc 

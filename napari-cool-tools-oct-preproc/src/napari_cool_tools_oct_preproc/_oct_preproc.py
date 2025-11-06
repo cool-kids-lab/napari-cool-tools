@@ -12,20 +12,21 @@ from magicgui import magic_factory
 def unwarp_sine_plugin(
     img: Image,
     transpose: bool = False,
+    interpolation_fac: int = 2,
 ):
-    unwarp_sine_thread(img, transpose=transpose) # type: ignore
-    
+    unwarp_sine_thread(img, transpose=transpose, interpolation_fac=interpolation_fac) # type: ignore
+
     return
 
 @thread_worker(connect={"yielded": viewer.add_layer})
-def unwarp_sine_thread(img: Image, transpose: bool = False):
+def unwarp_sine_thread(img: Image, transpose: bool = False, interpolation_fac: int = 2):
     """"""
 
     show_info("Starting sine unwarping...")
 
     add_kwargs = {"name": f"{img.name}_unwarped"}
     input_data = torch.Tensor(img.data).to(device)
-    output_data = desine(input_data, mode="bilinear", transpose=transpose)
+    output_data = desine(input_data, mode="bilinear", transpose=transpose, scale_fac=interpolation_fac)
     output_data = output_data.cpu().numpy()
     layer = Layer.create(output_data, add_kwargs, "image")
 
