@@ -63,7 +63,7 @@ def projection_thread(
     name = img.name
     axis_suffix = ""
     if axis == ProjectionDir.EN_FACE:
-        axis_suffix = "en_face"
+        axis_suffix = "enface"
     elif axis == ProjectionDir.FAST_AXIS:
         axis_suffix = "fast_axis"
     elif axis == ProjectionDir.SLOW_AXIS:

@@ -3,7 +3,7 @@ import math
 import torch.nn.functional as F
 from napari_cool_tools_oct_preproc import Operation
 
-def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 1) -> torch.Tensor:
+def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 2) -> torch.Tensor:
     def desine_torch_2D(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
         """
         Regrid a 2D array from sine-spaced samples to uniform (linspace) along the chosen axis.
@@ -122,36 +122,6 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
 
             y[i] = x.squeeze(0).squeeze(0)  # [D,H,W]
 
-        # _,_,D, H, W = x.shape  # now W is sine-sampled axis
-
-        # Wm1 = float(W - 1)
-        # j = torch.linspace(0.0, Wm1, W, device=frame.device)
-        # arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)
-        # arg = torch.clamp(arg, -1.0, 1.0)
-        # theta = torch.arcsin(arg)
-        # n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)
-        # grid_x = (2.0 * n_src / Wm1) - 1.0  # normalized [-1,1]
-
-        # # create full 3D grid (Z,Y,X)
-        # grid_z = torch.linspace(-1.0, 1.0, D, device=frame.device)
-        # grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device)
-        # grid_z, grid_y, grid_x = torch.meshgrid(grid_z, grid_y, grid_x, indexing="ij")
-        # grid = torch.stack((grid_x, grid_y, grid_z), dim=-1).unsqueeze(0)  # [1,D,H,W,3]
-
-        # # bilinear sampling
-        # y = F.grid_sample(
-        #     x, grid, mode=mode, padding_mode="zeros", align_corners=True
-        # )
-
-        # #down sample image
-        # y = torch.nn.functional.interpolate(
-        #     x,
-        #     scale_factor=(1.0, 1.0, 1.0/scale_fac),  # explicit output size
-        #     mode='trilinear',
-        #     align_corners=False
-        # )
-        
-        # y = y.squeeze(0).squeeze(0)  # [D,H,W]
 
         # undo permutation
         if transpose:
@@ -207,75 +177,23 @@ def generate_octa(
             #average ada
             out_data[idx] = out_data[idx]/(mscans-1)
 
+    elif calc == OCTACalc.ADAVAR2 :
+        out_data = torch.zeros((m_img.shape[0],m_img.shape[-2],m_img.shape[-1]), device=device)
+        for idx,pair in enumerate(m_img):
+            for ii in range(0,mscans-1):
+                frameA = pair[ii]
+                frameB = pair[ii+1]
+
+                ada = 1 - (frameA * frameB) / (0.5*frameA**2 + 0.5*frameB**2)
+                out_data[idx] = out_data[idx]+ada
+
+            #average ada
+            out_data[idx] = out_data[idx]/(mscans-1)
+            out_data[idx] = out_data[idx] * (m_img[idx].var(dim=0)**2)
+
     out_data_numpy = out_data.cpu().numpy()
 
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
     return out_data_numpy
-
-def reshuffle_vista_frames(ref_RawData: np.ndarray, nvista: int, numMScans: int) -> np.ndarray:
-    """
-    Reorders frames in ref_RawData for 'vista' grouping, matching the given MATLAB logic.
-
-    Parameters
-    ----------
-    ref_RawData : np.ndarray
-        3D array of shape (H, W, numBScans).
-    nvista : int
-        Number of vista views.
-    numMScans : int
-        Number of M-scans.
-
-    Returns
-    -------
-    np.ndarray
-        Reordered array with the same shape as ref_RawData.
-    """
-    numBScans  = ref_RawData.shape[0]
-    if nvista <= 1:
-        return ref_RawData.copy()
-
-    block = nvista * numMScans
-    if numBScans % block != 0:
-        raise ValueError(
-            f"numBScans ({numBScans}) must be divisible by nvista*numMScans ({block})."
-        )
-
-    # --- Vectorized permutation (fast) ---
-    # Within each block of size (nvista x numMScans), MATLAB orders linear indices column-wise.
-    # The MATLAB code remaps to row-wise order. Build that mapping:
-    # perm[t] = source_index_within_block for target position t (0-based).
-    perm = np.arange(block).reshape(nvista, numMScans, order='F').ravel(order='C')
-
-    out = np.empty_like(ref_RawData)
-    for start in range(0, numBScans, block):
-        out[start:start+block,:,:] = ref_RawData[start + perm, :, :]
-
-    return out
-
-
-# def reshuffle_vista_frames(ref_RawData: np.ndarray, nvista: int, numMScans: int) -> np.ndarray:
-#     H, W, numBScans = ref_RawData.shape
-#     if nvista <= 1:
-#         return ref_RawData.copy()
-
-#     temp_bcans_size = numBScans // (nvista * numMScans)
-#     if temp_bcans_size * nvista * numMScans != numBScans:
-#         raise ValueError("numBScans must be divisible by nvista*numMScans.")
-
-#     new_data = np.zeros_like(ref_RawData)
-
-#     # Build A_idx (MATLAB 1-based -> convert to 0-based)
-#     A_idx = np.arange(1, nvista * numMScans + 1).reshape(nvista, numMScans, order='F')
-
-#     for k in range(1, temp_bcans_size + 1):
-#         for i in range(1, nvista + 1):
-#             for j in range(1, numMScans + 1):
-#                 target_idx = nvista * numMScans * (k - 1) + ((i - 1) * numMScans) + j
-#                 ori_idx    = A_idx[i - 1, j - 1] + nvista * numMScans * (k - 1)
-
-#                 # Convert to 0-based indices for Python
-#                 new_data[:, :, target_idx - 1] = ref_RawData[:, :, ori_idx - 1]
-
-#     return new_data

@@ -10,6 +10,7 @@ from napari.utils.notifications import show_info
 from napari_cool_tools_io import torch
 from skimage.measure import block_reduce
 from tqdm import tqdm
+from napari_cool_tools_io import device
 
 
 class Implementation(Enum):
@@ -32,6 +33,36 @@ def average_bscans(vol: ImageData, scans_per_avg: int = 3) -> ImageData:
     averaged_array = block_reduce(vol, block_size=(scans_per_avg, 1, 1), func=np.mean)
 
     return averaged_array
+
+
+def average_bscans_torch(vol: ImageData, scans_per_avg: int = 3) -> ImageData:
+    """Function averaging every scans_per_avg images/B-scans together using PyTorch.
+    Args:
+        vol (ImageData): vol representing volumetric or image stack data (Z, Y, X)
+        scans_per_avg (int): number of consecutive images/B-scans to average together
+
+    Returns:
+        ImageData volume averaged every scans_per_avg images/B-scans along the depth dimension
+    """
+    if scans_per_avg <= 0:
+        raise ValueError("scans_per_avg must be a positive integer")
+
+    vol_t = torch.as_tensor(vol.copy()).to(device)
+    z, y, x = vol_t.shape
+
+    if z % scans_per_avg != 0:
+        raise ValueError(
+            f"Depth dimension ({z}) must be divisible by scans_per_avg ({scans_per_avg})"
+        )
+
+    out = (
+        vol_t.view(z // scans_per_avg, scans_per_avg, y, x)
+        .mean(dim=1)
+        .cpu()
+        .numpy()
+    )
+
+    return out
 
 
 def average_per_bscan(

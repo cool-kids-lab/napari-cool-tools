@@ -41,12 +41,16 @@ def curve_correction(
     data = image.data
     name = f"{image.name}_curve_corrected"
 
+    data[-1,:,:] = data[-1,:,:]*0.0 #delete last frame to avoid some issue
+    data[:,0:2,:] = data[:,0:2,:]*0.0 #delete last frame to avoid some issue
+    data[:,-3:-1,:] = data[:,-3:-1,:]*0.0 #delete last frame to avoid some issue
+
     #################
     # curve correction 2D, This step is cylindrical coordinates convertion
     # pivot_point is in pixel
 
     data = data.transpose((0, 2, 1))  # [840, 1024,800] to [840, 800,1024]
-    output_size = np.min(data[:, :, 0].shape)
+    output_size = data.shape[1]
 
     ##############################
     #main function to resize using torch
@@ -55,23 +59,29 @@ def curve_correction(
     input_data, 
     size=(output_size, output_size, data.shape[-1]),
     mode='trilinear', 
-    align_corners=False
+    align_corners=True
     )
     data = data.squeeze(0).squeeze(0)
+    print(f"data.shape: {data.shape}")
     ######################################
 
-    output_size_th = output_size * 2 #multiplie by 2 to improve resampling quality
+    # output_size = 800
+    output_size_th = output_size*2#TODO #multiplie by 2 to improve resampling quality
+
     r = (
-        np.linspace(0, output_size - 1, output_size) - output_size * 0.5 + 0.5
-    )  # from 0 -> 839, don't put exactly at 0.0
+        np.linspace(0, output_size-1, output_size) - output_size * 0.5 + 0.5
+    )
+
     th = np.linspace(0, output_size_th, output_size_th)
-    th = np.pi * th / output_size_th  # 180 degree scan
+    th = np.pi * th / output_size_th # 180 degree scan
+    # th = th + (th[1] - th[0]) * 0.5
 
     R, TH = np.meshgrid(r, th)
 
-    x = R * np.cos(TH) #X is range from -400.5 to 400.5
+    #this is correct
+    x = R * np.cos(TH) #X is range from -399.5 to 399.5
     x = x / (output_size * 0.5) # Normalize to [-1, 1] for pytorch
-    y = R * np.sin(TH) #Y is range from -400.5 to 400.5
+    y = R * np.sin(TH) #Y is range from -399.5 to 399.5
     y = y / (output_size * 0.5) # Normalize to [-1, 1] for pytorch
 
     coordinates = np.array([x, y],dtype=np.float32)
@@ -89,8 +99,8 @@ def curve_correction(
     coords_normalized = coords_normalized.unsqueeze(0)
 
     output_image = torch.zeros(
-        (output_size_th, output_size, data.shape[2]),dtype=torch.float32, device=device
-    )
+        (output_size_th, output_size, data.shape[-1]),dtype=torch.float32, device=device
+    ) # [1600,800,1024]
 
     for fnum in range(0, data.shape[-1]):  # 1024 iteration
         image_torch = data[:, :, fnum]
@@ -100,7 +110,7 @@ def curve_correction(
             image_torch.unsqueeze(0).unsqueeze(0),
             coords_normalized,
             mode='bilinear',
-            align_corners=True
+            align_corners=True # already half compensated
         )
         
         new_image = new_image.squeeze(0).squeeze(0)
@@ -108,8 +118,10 @@ def curve_correction(
         yield 1
 
     # output_image = output_image.cpu().numpy()
-    # output_image = output_image.transpose((0, 2, 1))  #[840,800,1024] to [840, 1024, 840]
-    data = output_image
+    #output_image = output_image.transpose((2, 0, 1))  #[1600,800,1024] to [1024, 800, 800]
+    data = output_image# [1600,800,1024]
+
+    print(f"data.shape: {data.shape}")
 
     #################
     # curve correction 2D, this is the curve correction for each individual image on the cylindrical coordinates
@@ -121,7 +133,6 @@ def curve_correction(
     print(imaging_range)
     pixel_spacing = imaging_range / data.shape[-1]
 
-    pivot_point = pivot_point  # this is the reference pivot point, this is constant
     reference_arm_shift = (
         reference_arm_shift * 0.5 / n
     )  # this is the reference arm location relative to the position at pivot point (known to be 85000)
@@ -134,21 +145,20 @@ def curve_correction(
     padding_pixel = int(padding / pixel_spacing)
 
     radius = data.shape[-1] + padding_pixel
-    resolution = np.round(radius * down_sample_factor).astype(int)
+    resolution = np.round(radius).astype(int)
 
     # grid for the target image
     x = np.linspace(0, radius, resolution)
     y = np.linspace(0, radius * 2, resolution*2)
-    X, Y = np.meshgrid(x, y)
+    X, Y = np.meshgrid(x, y, indexing="xy")
 
     # center the target
-    X = X# - radius #[-radius,+radius]
+    # X = X# - radius #[-radius,+radius]
     Y = Y - radius#[0,+radius]
 
     # this is the location in the image in polar corrdinates
     new_r = np.sqrt(X * X + Y * Y)
     new_th = np.arctan2(Y, X)
-
     # removes some ugly values
     new_th[np.isnan(new_th)] = 0
     new_r[np.isnan(new_r)] = 0
@@ -158,14 +168,15 @@ def curve_correction(
 
     r = np.linspace(0, radius - 1, radius)
     angle = 0.5 * scan_angle #TODO theorically scan angle should be recalculated for each scan (see paper)
-    th = np.linspace(-angle / 180 * np.pi, angle / 180 * np.pi, num_theta)
+    th = np.linspace(-np.deg2rad(angle), np.deg2rad(angle), num_theta)
 
     # interpolate the target location in the image polar coordinates
+    #TODO add 0.5
     ir = interp1d(
-        r, np.arange(len(r)), bounds_error=False, fill_value=-radius, kind="linear"
+        r, np.arange(radius), bounds_error=False, fill_value=-radius, kind="linear"
     )
     ith = interp1d(
-        th, np.arange(len(th)), bounds_error=False, fill_value=-num_theta, kind="linear"
+        th, np.arange(num_theta), bounds_error=False, fill_value=-num_theta, kind="linear"
     )
     new_ir = ir(new_r) #this is now in image index 0 -> radius (1024)
     #normalize new_ir to [-1, 1] for torch
@@ -175,12 +186,22 @@ def curve_correction(
     #normalize new_ith to [-1, 1] for torch
     new_ith = (new_ith / (num_theta - 1)) * 2 - 1
 
-    top_image = int(0.5*padding_pixel * np.cos(angle / 180 * np.pi))
+    top_image = int(padding_pixel* down_sample_factor * np.cos(np.deg2rad(angle)))
+    right_image = int(down_sample_factor*radius*(1 - np.sin(angle / 180 * np.pi)))
 
-    output_image = np.zeros((data.shape[0], resolution*2, resolution - top_image),dtype=np.float32)
+    # make sure even number for better resampling
+    new_width = int(down_sample_factor*resolution*2)
+    new_width = new_width + (int(new_width) % 2)
+
+    new_depth = int(down_sample_factor*resolution)
+    new_depth = new_depth + (int(new_depth) % 2)
+
+    output_image = np.zeros((data.shape[0], new_width, 
+                             new_depth-top_image),dtype=np.float32)
+    
+    # [1600,800,1024]
 
     coordinates = np.array([new_ith, new_ir],dtype=np.float32) # [_,800,1024]
-    # coordinates_gpu = cu.asarray(coordinates)
 
     # Convert coordinates to torch tensors
     coords_torch = torch.from_numpy(coordinates).to(device)
@@ -211,15 +232,23 @@ def curve_correction(
             align_corners=True
         )
 
+        new_image = torch.nn.functional.interpolate(
+            new_image,
+            size=(new_width, 
+                  new_depth),
+            mode='bilinear',
+            align_corners=True
+        )
+
         new_image = new_image.squeeze(0).squeeze(0).cpu().numpy()
-        output_image[frame] = new_image[:, top_image:]
+        output_image[frame] = new_image[:,top_image:]
         yield 1
 
-    right_image = int(0.5*radius - (0.5 * radius * np.sin(angle / 180 * np.pi)))
-
     output_image = output_image[:, right_image:-right_image, :]
-    output_image = output_image.transpose((2, 1, 0))  # [800, 800, 1024] -> [1024, 800, 800]
+    # output_image = output_image.transpose((0, 2, 1))  # [800, 800, 1024] -> [1024, 800, 800]
     data = output_image
+    print(f"data.shape: {data.shape}")
+    # [1600,800,1024]
 
     #############################
     # put it back to cartesian
@@ -235,24 +264,26 @@ def curve_correction(
     Y = Y - output_size * 0.5 + 0.5 #center at 0 [-400.5,400.5]
 
     # this is the new target location
-    new_r = np.sign(Y + 0.1) * np.sqrt(X * X + Y * Y)  #put sign to avoid all positive
+    new_r = np.sign(Y) * np.sqrt(X * X + Y * Y)  #put sign to avoid all positive
     new_th = np.arctan2(Y, X)  # [avoid negative angle]
     new_th = np.mod(new_th, np.pi)
     new_th[np.isnan(new_th)] = 0
 
     # This is location in the polar image
     num_r = data.shape[1]  # [840]
-    num_theta = data.shape[2]*2  # 840 multiply by 2 for better quality
+    num_theta = data.shape[0]*2#TODO  # 1600 multiply by 2 for better quality
 
     r = (
         np.linspace(0, num_r - 1, num_r) - num_r * 0.5 + 0.5 #[-400.5,400.5]
     )
-
+    
     th = np.linspace(0, num_theta, num_theta)
     th = np.pi * th / num_theta # 180 degree scan
 
     ir = interp1d(
-        r, np.arange(len(r)), bounds_error=False, fill_value=-num_r, kind="linear"
+        r,
+        np.arange(num_r),#0->num_r-1
+        bounds_error=False, fill_value=-num_r, kind="linear"
     )
     ith = interp1d(
         th, np.arange(len(th)), bounds_error=False, fill_value=-num_theta, kind="linear"
@@ -266,7 +297,7 @@ def curve_correction(
     #normalize new_ith to [-1, 1] for torch
     new_ith = (new_ith / (num_theta - 1)) * 2 - 1
 
-    coordinates = np.array([new_ir, new_ith],dtype=np.float32)
+    coordinates = np.array([new_ith, new_ir],dtype=np.float32)
 
     # Convert coordinates to torch tensors
     coords_torch = torch.from_numpy(coordinates).to(device)
@@ -278,17 +309,17 @@ def curve_correction(
     # Reshape for grid_sample: [1, H, W, 2]
     coords_normalized = coords_normalized.unsqueeze(0)
 
-    output_image = np.zeros((data.shape[0], output_size, output_size),dtype=np.float32)
+    output_image = np.zeros((output_size, output_size, data.shape[-1]), dtype=np.float32)
 
-    for fnum in range(0, data.shape[0]):  # 1024 iteration
-        image = data[fnum, :, :]
+    for fnum in range(0, data.shape[-1]):  # 1024 iteration
+        image = data[:, :, fnum]
 
         image_torch = torch.Tensor(image).unsqueeze(0).unsqueeze(0).to(device)
         image_torch = torch.nn.functional.interpolate(
             image_torch,
             size=(num_r, num_theta),
             mode='bilinear',
-            align_corners=False
+            align_corners=True
         )
 
         # Apply grid_sample (torch equivalent of map_coordinates)
@@ -300,10 +331,15 @@ def curve_correction(
         )
 
         new_image = new_image.squeeze(0).squeeze(0)
-        output_image[fnum,:,:] = new_image.cpu().numpy()
+        output_image[:, :, fnum] = new_image.cpu().numpy()
         yield 1
 
-    output_image = output_image.transpose((2, 0, 1))  # [1024, 800, 800] -> [800, 1024, 800]
+    print(f"output_image.shape: {output_image.shape}")
+
+    output_image = output_image.transpose((1, 2, 0))  # [1600, 800, 1024] -> [800, 1024, 800]
+
+    print(f"output_image.shape: {output_image.shape}")
+
 
     add_kwargs = {"name": name}
     layer_type = "image"

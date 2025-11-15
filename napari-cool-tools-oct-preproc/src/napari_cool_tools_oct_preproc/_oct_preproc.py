@@ -3,7 +3,7 @@ import torch
 from napari_cool_tools_io import viewer, device
 from napari.layers import Image, Layer, Labels
 from napari.qt.threading import thread_worker
-from napari.utils.notifications import show_info
+from napari.utils.notifications import show_info, show_error
 from napari_cool_tools_oct_preproc import OCTACalc
 
 import numpy as np
@@ -27,8 +27,8 @@ def unwarp_sine_thread(img: Image, transpose: bool = False, interpolation_fac: i
     add_kwargs = {"name": f"{img.name}_unwarped"}
     input_data = torch.Tensor(img.data).to(device)
     output_data = desine(input_data, mode="bilinear", transpose=transpose, scale_fac=interpolation_fac)
-    output_data = output_data.cpu().numpy()
-    layer = Layer.create(output_data, add_kwargs, "image")
+    output_data_cpu = output_data.cpu().numpy()
+    layer = Layer.create(output_data_cpu, add_kwargs, "image")
 
     del input_data, output_data
     # Clear cache to free up memory
@@ -41,30 +41,139 @@ def unwarp_sine_thread(img: Image, transpose: bool = False, interpolation_fac: i
 
 
 from napari_cool_tools_vol_proc import ProjectionDir, ProjectionType
-from napari_cool_tools_vol_proc._projection_tools import projection_thread
+from napari_cool_tools_vol_proc._projection_tools_funcs import projection
 
 def generate_enface_plugin(
     img: Layer,
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
+    desine_unwarp: bool = False,
 ):
+    
+    if img.data.ndim != 3:
+        show_error("Input volume must be 3D.")
+        return
 
-    projection_thread(img=img, axis=axis, projection_type=projection_type)
-
-    return
+    generate_enface_thread(img=img, axis=axis, projection_type=projection_type, desine_unwarp=desine_unwarp)
 
 
-
-def generate_octa_plugin(
+@thread_worker(connect={"yielded": viewer.add_layer})
+def generate_enface_thread(
     img: Layer,
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
-):
+    desine_unwarp: bool = False,
+):    
+    if desine_unwarp:
+        
+        input_data = torch.Tensor(img.data).to(device)
+        output_data = desine(input_data, mode="bilinear", transpose=False, scale_fac=2)
+        output_data_cpu = output_data.cpu().numpy()
+        del input_data, output_data
+        # Clear cache to free up memory
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
 
-    projection_thread(img=img, axis=axis, projection_type=projection_type)
+        output_data_cpu = projection(data=output_data_cpu, axis=axis.value, projection_type=projection_type.value)
 
-    return
+        axis_suffix = ""
+        if axis == ProjectionDir.EN_FACE:
+            axis_suffix = "enface"
+        elif axis == ProjectionDir.FAST_AXIS:
+            axis_suffix = "fast_axis"
+        elif axis == ProjectionDir.SLOW_AXIS:
+            axis_suffix = "slow_axis"
 
+        add_kwargs = {"name": f"{img.name}_{axis_suffix}"}
+        layer = Layer.create(output_data_cpu, add_kwargs, "image")
+        vmin, vmax = np.percentile(output_data_cpu, (1, 99))
+        layer.contrast_limits = (float(vmin), float(vmax))
+
+        yield layer
+
+    else:
+        output_data_cpu = projection(data=img.data, axis=axis.value, projection_type=projection_type.value)
+
+        axis_suffix = ""
+        if axis == ProjectionDir.EN_FACE:
+            axis_suffix = "enface"
+        elif axis == ProjectionDir.FAST_AXIS:
+            axis_suffix = "fast_axis"
+        elif axis == ProjectionDir.SLOW_AXIS:
+            axis_suffix = "slow_axis"
+
+        add_kwargs = {"name": f"{img.name}_{axis_suffix}"}
+        layer = Layer.create(output_data_cpu, add_kwargs, "image")
+        vmin, vmax = np.percentile(output_data_cpu, (1, 99))
+        layer.contrast_limits = (float(vmin), float(vmax))
+
+        yield layer
+
+    
+
+def generate_pseudocolor_enface_plugin(
+    img: Layer,
+    desine_unwarp: bool = False,
+    crop: int = 10,
+):      
+    if img.data.ndim != 3:
+        show_error("Input volume must be 3D.")
+        return
+
+    generate_pseudocolor_enface_thread(img=img, desine_unwarp=desine_unwarp, crop=crop)
+
+
+@thread_worker(connect={"yielded": viewer.add_layer})
+def generate_pseudocolor_enface_thread(img: Layer,
+    desine_unwarp: bool = False,
+    crop: int = 0,
+    ):
+    
+
+    data = img.data
+
+    if desine_unwarp:
+        input_data = torch.Tensor(data).to(device)
+        output_data = desine(input_data, mode="bilinear", transpose=False, scale_fac=2)
+        data = output_data.cpu().numpy()
+
+        del input_data, output_data
+        # Clear cache to free up memory
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
+
+    output_max = projection(data=data, axis=ProjectionDir.EN_FACE.value, projection_type=ProjectionType.MAX.value,crop=crop)
+    output_max = np.log10(output_max + 1e-6)  # log scale
+
+    vmin, vmax = np.percentile(output_max, (1, 99))
+    output_max = np.clip(output_max, vmin, vmax)
+    output_max = (output_max - vmin) / (vmax - vmin)
+
+    output_mean = projection(data=data, axis=ProjectionDir.EN_FACE.value, projection_type=ProjectionType.MEAN.value,crop=crop)
+    vmin, vmax = np.percentile(output_mean, (1, 99))
+    output_mean = np.clip(output_mean, vmin, vmax)
+    output_mean = (output_mean - vmin) / (vmax - vmin)
+
+    # --- RGB with blue = 0 ---
+    output_rgb = np.stack(
+        [
+            output_max,              # R
+            output_mean,             # G
+            np.zeros_like(output_max)  # B
+        ],
+        axis=-1,
+    ).astype(np.float32)
+
+    yield Layer.create(
+        output_rgb,
+        {
+            "name": f"{img.name}_pseudocolor_enface",
+            "rgb": True,
+        },
+        "image",
+    )
+
+    # yield Layer.create(output_rgb, {"name": f"{img.name}_pseudocolor_enface"}, "image")
 
 
 def generate_octa_plugin(

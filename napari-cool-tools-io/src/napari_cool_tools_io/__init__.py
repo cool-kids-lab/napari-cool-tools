@@ -21,15 +21,17 @@ class unp_meta:
     double_side: bool = False
     pattern: str = "Sine"
     full_range: bool = False
-    auto_dispersion: bool = False
     desine: bool = False
+    dcSubtract: bool = True
+    log_scale: bool = False
+    max_projection: bool = False
     delay: int = 0
-    sine_frame_indices: list = None # type: ignore
+    sine_frame_indices: list[int] = None
     sine_hires_ratio: int = 0
-    dispersion_range: int = 100
-    inverse_dispersion: bool = False
     c2: int = 0
     c3: int = 0
+    octa: str = "none"
+    structure: bool = False
 
 def memory_stats():
     show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")

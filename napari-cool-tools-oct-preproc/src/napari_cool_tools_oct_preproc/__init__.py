@@ -11,6 +11,7 @@ class OCTACalc(Enum):
     VAR = "Variance"
     VAR2 = "Variance Squared"
     ADA = "Adaptive Decorrelation"
+    ADAVAR2 = "Adaptive Decorrelation + Variance Squared"
 
 # Enums are a convenient way to get a dropdown menu
 class Operation(Enum):

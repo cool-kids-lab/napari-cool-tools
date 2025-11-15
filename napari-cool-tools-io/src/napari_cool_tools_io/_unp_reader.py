@@ -2,121 +2,15 @@ import os.path as ospath
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import configparser
+from napari_cool_tools_vol_proc._averaging_tools_funcs import average_bscans_torch
 import numpy as np
 from napari.utils.notifications import show_info
 from napari_cool_tools_io.process_unp import process_unp, process_unp_sine_pause
-from qtpy.QtWidgets import QVBoxLayout, QHBoxLayout
-from qtpy.QtWidgets import QCheckBox
-from qtpy.QtWidgets import QDialog, QDialogButtonBox
-from dataclasses import dataclass
+from qtpy.QtWidgets import QDialog
 from napari_cool_tools_io import unp_meta
-from qtpy.QtWidgets import QWidget, QSpinBox, QLabel, QHBoxLayout
-from napari_cool_tools_oct_preproc._oct_preproc_func import generate_octa
-from napari_cool_tools_oct_preproc._oct_preproc_func import reshuffle_vista_frames
-from skimage.transform import resize
-
-def xml_dialog(parent=None, double_side_button=True, full_range_button=True, auto_dispersion_button=True, desine_button=True):
-    """Show a modal dialog with a 'Double-sided' checkbox and Accept/Cancel buttons.
-
-    Returns:
-        tuple[str, bool]: ("accepted" or "canceled", final_double_side_value)
-    """
-    # local imports to avoid changing top-level imports
-
-    dialog = QDialog(parent)
-    dialog.setWindowTitle("Double Side Option")
-
-    double_side_checkbox = QCheckBox("Double Sided")
-    double_side_checkbox.setChecked(False)
-
-    full_range_checkbox = QCheckBox("Full Range")
-    full_range_checkbox.setChecked(False)
-
-    auto_dispersion_checkbox = QCheckBox("Auto Dispersion Compensation")
-    auto_dispersion_checkbox.setChecked(False)
-
-    inverse_dispersion_checkbox = QCheckBox("Inverse Dispersion")
-    inverse_dispersion_checkbox.setChecked(False)
-    inverse_dispersion_checkbox.setEnabled(auto_dispersion_checkbox.isChecked())
-
-    c2_spinbox = QSpinBox()
-    c2_spinbox.setRange(0, 10000)
-    c2_spinbox.setSingleStep(1)
-    c2_spinbox.setValue(0)
-
-    c3_spinbox = QSpinBox()
-    c3_spinbox.setRange(0, 10000)
-    c3_spinbox.setSingleStep(1)
-    c3_spinbox.setValue(0)
-
-    manual_dispersion_layout = QHBoxLayout()
-    manual_dispersion_layout.setContentsMargins(0, 0, 0, 0)
-    manual_dispersion_layout.addWidget(QLabel("C2:"))
-    manual_dispersion_layout.addWidget(c2_spinbox)
-    manual_dispersion_layout.addWidget(QLabel("C3:"))
-    manual_dispersion_layout.addWidget(c3_spinbox)
-
-    # add a spinbox next to the Auto Dispersion checkbox
-    auto_dispersion_spinbox = QSpinBox()
-    auto_dispersion_spinbox.setRange(0, 10000)
-    auto_dispersion_spinbox.setSingleStep(1)
-    auto_dispersion_spinbox.setValue(100)
-    auto_dispersion_spinbox.setEnabled(auto_dispersion_checkbox.isChecked())
-    manual_dispersion_layout.setEnabled(not auto_dispersion_checkbox.isChecked())
-
-    # keep spinbox enabled/disabled in sync with the checkbox
-    auto_dispersion_checkbox.toggled.connect(auto_dispersion_spinbox.setEnabled)
-    auto_dispersion_checkbox.toggled.connect(inverse_dispersion_checkbox.setEnabled)
-    auto_dispersion_checkbox.toggled.connect(c2_spinbox.setDisabled)
-    auto_dispersion_checkbox.toggled.connect(c3_spinbox.setDisabled)
-    auto_dispersion_checkbox.toggled.connect(lambda checked: inverse_dispersion_checkbox.setChecked(False))
-
-    auto_dispersion_layout = QHBoxLayout()
-    auto_dispersion_layout.setContentsMargins(0, 0, 0, 0)
-    auto_dispersion_layout.addWidget(auto_dispersion_checkbox)
-    auto_dispersion_layout.addWidget(QLabel("Dispersion range:"))
-    auto_dispersion_layout.addWidget(auto_dispersion_spinbox)
-
-    auto_dispersion_widget = QWidget()
-    auto_dispersion_widget.setLayout(auto_dispersion_layout)
-
-    desine_checkbox = QCheckBox("Desine")
-    desine_checkbox.setChecked(False)
-
-    btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-    # connect the button box signals so the dialog will accept/reject and close
-    btn_box.accepted.connect(dialog.accept)
-    btn_box.rejected.connect(dialog.reject)
-
-    main_layout = QVBoxLayout()
-    if double_side_button:
-        main_layout.addWidget(double_side_checkbox)
-
-    if full_range_button:
-        main_layout.addWidget(full_range_checkbox)
-
-    if auto_dispersion_button:
-        main_layout.addWidget(auto_dispersion_widget)
-        main_layout.addWidget(inverse_dispersion_checkbox)
-        main_layout.addLayout(manual_dispersion_layout)
-
-    if desine_button:
-        main_layout.addWidget(desine_checkbox)
-
-    main_layout.addWidget(btn_box)
-    dialog.setLayout(main_layout)
-
-    result = dialog.exec_()
-
-    if result == QDialog.Accepted:
-        return (True, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()),
-                 c2_spinbox.value(), c3_spinbox.value())
-    else:
-        # checkbox has been reverted in _on_reject, so return that value
-        return (False, bool(double_side_checkbox.isChecked()), bool(full_range_checkbox.isChecked()),
-                 bool(auto_dispersion_checkbox.isChecked()), bool(desine_checkbox.isChecked()), auto_dispersion_spinbox.value(), bool(inverse_dispersion_checkbox.isChecked()),
-                 c2_spinbox.value(), c3_spinbox.value())
+from napari_cool_tools_io._unp_preview_widget import Unp_Preview_Widget
+from napari.layers import Layer
+from napari_cool_tools_oct_preproc._oct_preproc_func import generate_octa, OCTACalc
 
 def unp_get_reader(path):
     """Return a reader callable for .unp files, or None if the path is unsupported.
@@ -147,8 +41,6 @@ def unp_get_reader(path):
         return unp_file_reader
     
     return None
-
-
 
 def unp_proc_meta(path) -> unp_meta | None:
     """
@@ -212,6 +104,9 @@ def unp_proc_meta(path) -> unp_meta | None:
     meta = unp_meta()
     #width, height, depth = [4096, 800, 840]
 
+
+    # Unp_Preview_Widget()
+
     if Path(meta_path_ini).is_file():
         show_info(".ini Meta Data exists:")
 
@@ -232,23 +127,48 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
             meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
 
-        status, _, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion, meta.c2, meta.c3 = xml_dialog(double_side_button=False)
+        dialog = Unp_Preview_Widget()
+        dialog.set_unp_path(Path(path), meta)
 
-        if not status:
+        dialog.doubleSideCheckBox.setChecked(meta.double_side)
+
+        result = dialog.exec_()
+
+        if result == QDialog.Accepted:
+            meta.double_side = dialog.doubleSideCheckBox.isChecked()
+            meta.full_range = dialog.fullRangeCheckBox.isChecked()
+            meta.desine = dialog.desineCheckBox.isChecked()
+            meta.dcSubtract = dialog.dcSubtractCheckBox.isChecked()
+            meta.log_scale = dialog.logScaleCheckBox.isChecked()
+            meta.max_projection = dialog.maxProjectionCheckBox.isChecked()
+            meta.c2 = dialog.dispC2SpinBox.value()
+            meta.c3 = dialog.dispC3SpinBox.value()
+            
+            if dialog.OCTACheckBox.isChecked():
+                meta.octa = dialog.OCTAComboBox.currentText()
+                meta.structure = dialog.structureCheckBox.isChecked()
+
+            print("File Info")
+            print(f"width: {meta.width}")
+            print(f"height: {meta.height}")
+            print(f"depth: {meta.depth}")
+            print(f"bmscan: {meta.bmscan}")
+            print(f"vista: {meta.vista}")
+            print(f"packed: {meta.packed}")
+            print(f"double_side: {meta.double_side}")
+            print(f"pattern: {meta.pattern}")
+            print(f"delay: {meta.delay}")
+            print(f"full_range: {meta.full_range}")
+            print(f"desine: {meta.desine}")
+            print(f"dcSubtract: {meta.dcSubtract}")
+            print(f"log_scale: {meta.log_scale}")
+            print(f"max_projection: {meta.max_projection}")
+            print(f"c2: {meta.c2}")
+            print(f"c3: {meta.c3}")
+            print(f"octa: {meta.octa}")
+            return meta
+        else:
             return None
-
-        print("File Info")
-        print(f"width: {meta.width}")
-        print(f"height: {meta.height}")
-        print(f"depth: {meta.depth}")
-        print(f"bmscan: {meta.bmscan}")
-        print(f"vista: {meta.vista}")
-        print(f"packed: {meta.packed}")
-        print(f"double_side: {meta.double_side}")
-        print(f"pattern: {meta.pattern}")
-        print(f"delay: {meta.delay}")
-
-        return meta
 
     if Path(meta_path_xml).is_file():
         show_info(".xml Meta Data exists:")
@@ -265,26 +185,49 @@ def unp_proc_meta(path) -> unp_meta | None:
         scanning_params_attrib = scanning_params.attrib # type: ignore
         meta.bmscan = int(scanning_params_attrib["Number_of_BM_scans"])
 
-        status, meta.double_side, meta.full_range, meta.auto_dispersion, meta.desine, meta.dispersion_range, meta.inverse_dispersion, meta.c2, meta.c3 = xml_dialog()
-        
-        print("File Info")
-        print(f"width: {meta.width}")
-        print(f"height: {meta.height}")
-        print(f"depth: {meta.depth}")
-        print(f"bmscan: {meta.bmscan}")
-        print(f"vista: {meta.vista}")
-        print(f"packed: {meta.packed}")
-        print(f"double_side: {meta.double_side}")
-        print(f"pattern: {meta.pattern}")
-        print(f"delay: {meta.delay}")
+        dialog = Unp_Preview_Widget()
+        dialog.set_unp_path(Path(path), meta)
+        result = dialog.exec_()
 
-        if not status:
+        if result == QDialog.Accepted:
+            meta.double_side = dialog.doubleSideCheckBox.isChecked()
+            meta.full_range = dialog.fullRangeCheckBox.isChecked()
+            meta.desine = dialog.desineCheckBox.isChecked()
+            meta.dcSubtract = dialog.dcSubtractCheckBox.isChecked()
+            meta.log_scale = dialog.logScaleCheckBox.isChecked()
+            meta.max_projection = dialog.maxProjectionCheckBox.isChecked()
+            meta.c2 = dialog.dispC2SpinBox.value()
+            meta.c3 = dialog.dispC3SpinBox.value()
+            #packed is always false for xml only case
+            meta.packed = False
+
+            if dialog.OCTACheckBox.isChecked():
+                meta.octa = dialog.OCTAComboBox.currentText()
+                meta.structure = dialog.structureCheckBox.isChecked()
+
+            print("File Info")
+            print(f"width: {meta.width}")
+            print(f"height: {meta.height}")
+            print(f"depth: {meta.depth}")
+            print(f"bmscan: {meta.bmscan}")
+            print(f"vista: {meta.vista}")
+            print(f"packed: {meta.packed}")
+            print(f"double_side: {meta.double_side}")
+            print(f"pattern: {meta.pattern}")
+            print(f"delay: {meta.delay}")
+            print(f"full_range: {meta.full_range}")
+            print(f"desine: {meta.desine}")
+            print(f"dcSubtract: {meta.dcSubtract}")
+            print(f"log_scale: {meta.log_scale}")
+            print(f"max_projection: {meta.max_projection}")
+            print(f"c2: {meta.c2}")
+            print(f"c3: {meta.c3}")
+            print(f"octa: {meta.octa}")
+
+            return meta
+
+        else:
             return None
-        
-        #packed is always false for xml only case
-        meta.packed = False
-
-        return meta
 
     # case no metadata request path to metadata or cancel file load
     else:
@@ -312,76 +255,150 @@ def unp_file_reader(path):
         show_info("No associated .ini or .xml meta data file found or process was cancelled. Cannot proceed.")
         return [(None,)]
 
-
-    # #does not support Sine_Pause pattern at the moment
     if meta.pattern == "Sine_Pause":
         display, display_hires = process_unp_sine_pause(Path(path), meta)
-        display_enface = np.mean(display, axis=-1)
-
-        display = display.transpose(0,2,1)  # change from (depth, height, width) to (depth, width, height) for napari
-        display_hires = display_hires.transpose(0,2,1)  # change from (depth, height, width) to (depth, width, height) for napari
-
         _, tail = ospath.split(path)
         file_name = tail.split(".")[0]
         add_kwargs = {"name": file_name}
         layer_type = "image"
+        bscan_layer = Layer.create(display, add_kwargs, layer_type)
+        vmin, vmax = np.percentile(display, (1, 99))
+        bscan_layer.contrast_limits = (float(vmin), float(vmax))
 
         add_kwargs_hires = {"name": file_name + "_hires"}
         layer_type_hires = "image"
+        hires_layer = Layer.create(display_hires, add_kwargs_hires, layer_type_hires)
+        vmin, vmax = np.percentile(display_hires, (1, 99))
+        hires_layer.contrast_limits = (float(vmin), float(vmax))
 
         add_kwargs_enface = {"name": file_name + "_enface"}
         layer_type_enface = "image"
+        if meta.max_projection:
+            display_enface = np.max(display, axis=1)    
+        else:
+            display_enface = np.mean(display, axis=1)
 
-        return [(display, add_kwargs, layer_type), (display_hires, add_kwargs_hires, layer_type_hires), (display_enface, add_kwargs_enface, layer_type_enface)]
+        enface_layer = Layer.create(display_enface, add_kwargs_enface, layer_type_enface)
+        vmin, vmax = np.percentile(display_enface, (1, 99))
+        enface_layer.contrast_limits = (float(vmin), float(vmax))
+
+        return [bscan_layer, hires_layer, enface_layer]
     
+        #does no support sine pause with bmscan > 1 yet
+
     else:
 
-        display = process_unp(Path(path), meta)
-        display = display.transpose(0,2,1)  # change from (depth, height, width1008) to (depth, width1008, height) for napari
-
-        _, tail = ospath.split(path)
-        file_name = tail.split(".")[0]
-        add_kwargs = {"name": file_name}
-        layer_type = "image"
-
         if meta.bmscan > 1:
-            #TODO: Handle Vista Scans properly
-            if meta.vista > 1:
-                show_info("Vista scan data detected. Rearranging frames...")
-                display = reshuffle_vista_frames(display, meta.vista, meta.bmscan)
 
-                if meta.double_side:
-                    for frame_num in range(display.shape[0]):
-                        cframe = int(np.floor(frame_num/(meta.bmscan)))
-                        if (cframe % 2): #flip every odd frame (1,3,5,...) python is zero indexed
-                            display[frame_num,:,:] = display[frame_num,:,::-1]
+            display = process_unp(Path(path), meta)
+
+            if meta.octa != "none":
+                _, tail = ospath.split(path)
+                file_name = tail.split(".")[0]
+
+                output_layers = []
+
+                add_kwargs = {"name": file_name+ "_raw"}
+                layer_type = "image"
+                bscan_layer = Layer.create(display, add_kwargs, layer_type)
+                vmin, vmax = np.percentile(display, (1, 99))
+                bscan_layer.contrast_limits = (float(vmin), float(vmax))
+                output_layers.append(bscan_layer)
+
+                if meta.structure:
+                    #generate the strucutral and structural enface
+                    add_kwargs_structural = {"name": file_name + f"_structural"}
+                    display_structural = average_bscans_torch(display, scans_per_avg=meta.bmscan)
+                    structural_layer = Layer.create(display_structural, add_kwargs_structural, layer_type)
+                    vmin, vmax = np.percentile(display_structural, (1, 99))
+                    structural_layer.contrast_limits = (float(vmin), float(vmax))
+                    output_layers.append(structural_layer)
+
+                    add_kwargs_structural_enface = {"name": file_name + "_structural_enface"}
+                    if meta.max_projection:
+                        display_structural_enface = np.max(display_structural, axis=1)
+                    else:
+                        display_structural_enface = np.mean(display_structural, axis=1)
+
+                    structural_enface_layer = Layer.create(display_structural_enface, add_kwargs_structural_enface, layer_type)
+                    vmin, vmax = np.percentile(display_structural_enface, (1, 99))
+                    structural_enface_layer.contrast_limits = (float(vmin), float(vmax))
+                    output_layers.append(structural_enface_layer)
+
+
+                #generate OCTA and OCTA enface
+                add_kwargs_octa = {"name": file_name + f"_OCTA_{meta.octa}"}
+                display_octa = generate_octa(
+                    display,
+                    mscans=meta.bmscan,
+                    calc=OCTACalc[meta.octa],
+                    )
+                octa_layer = Layer.create(display_octa, add_kwargs_octa, layer_type)
+                vmin, vmax = np.percentile(display_octa, (1, 99))
+                octa_layer.contrast_limits = (float(vmin), float(vmax))
+                output_layers.append(octa_layer)
+
+                add_kwargs_octa_enface = {"name": file_name + f"_OCTA_{meta.octa}_enface"}
+                if meta.max_projection:
+                    display_octa_enface = np.max(display_octa, axis=1)
+                else:
+                    display_octa_enface = np.mean(display_octa, axis=1)
+
+                octa_enface_layer = Layer.create(display_octa_enface, add_kwargs_octa_enface, layer_type)
+                vmin, vmax = np.percentile(display_octa_enface, (1, 99))
+                octa_enface_layer.contrast_limits = (float(vmin), float(vmax))  
+                output_layers.append(octa_enface_layer)
+
+                return output_layers
             
             else:
-                if meta.double_side:
-                    for frame_num in range(display.shape[0]):
-                        cframe = int(np.floor(frame_num/meta.bmscan))
-                        if (cframe % 2): #flip every odd frame (1,3,5,...) python is zero indexed
-                            display[frame_num,:,:] = display[frame_num,:,::-1]
+                _, tail = ospath.split(path)
+                file_name = tail.split(".")[0]
 
-            show_info("OCTA data detected. Generating OCTA volume...")
-            octa_volume = generate_octa(display, mscans=meta.bmscan)
-            add_kwargs_octa = {"name": file_name + "_octa"}
+                add_kwargs = {"name": file_name}
+                layer_type = "image"
+                bscan_layer = Layer.create(display, add_kwargs, layer_type)
+                vmin, vmax = np.percentile(display, (1, 99))
+                bscan_layer.contrast_limits = (float(vmin), float(vmax))
 
-            add_kwargs_enface = {"name": file_name + "_enface"}
-            layer_type_enface = "image"
 
-            display_enface = np.mean(display, axis=1)
-            display_enface = resize(display_enface, (octa_volume.shape[0],octa_volume.shape[2]), anti_aliasing=True, preserve_range=True)
+                add_kwargs_enface = {"name": file_name + "_enface"}
+                layer_type_enface = "image"
 
-            return [(display, add_kwargs, layer_type), (display_enface, add_kwargs_enface, layer_type_enface), (octa_volume, add_kwargs_octa, layer_type)]
+                if meta.max_projection:
+                    display_enface = np.max(display, axis=1)
+                else:
+                    display_enface = np.mean(display, axis=1)
+
+                enface_layer = Layer.create(display_enface, add_kwargs_enface, layer_type_enface)
+                vmin, vmax = np.percentile(display_enface, (1, 99))
+                enface_layer.contrast_limits = (float(vmin), float(vmax))
+
+                return [bscan_layer, enface_layer]
         
         else:
+            display = process_unp(Path(path), meta)
+
+            _, tail = ospath.split(path)
+            file_name = tail.split(".")[0]
+
+            add_kwargs = {"name": file_name}
+            layer_type = "image"
+            bscan_layer = Layer.create(display, add_kwargs, layer_type)
+            vmin, vmax = np.percentile(display, (1, 99))
+            bscan_layer.contrast_limits = (float(vmin), float(vmax))
+
+            # else:
             add_kwargs_enface = {"name": file_name + "_enface"}
             layer_type_enface = "image"
 
-            if meta.double_side:
-                display[1::2, :, :] = display[1::2, :, ::-1]
+            if meta.max_projection:
+                display_enface = np.max(display, axis=1)
+            else:
+                display_enface = np.mean(display, axis=1)
 
-            display_enface = np.mean(display, axis=1)
+            enface_layer = Layer.create(display_enface, add_kwargs_enface, layer_type_enface)
+            vmin, vmax = np.percentile(display_enface, (1, 99))
+            enface_layer.contrast_limits = (float(vmin), float(vmax))
 
-            return [(display, add_kwargs, layer_type), (display_enface, add_kwargs_enface, layer_type_enface)]
+            return [bscan_layer, enface_layer]

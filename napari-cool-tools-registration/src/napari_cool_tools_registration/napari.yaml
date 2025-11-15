@@ -29,6 +29,12 @@ contributions:
     - id: napari-cool-tools-registration.enface_registration
       title: Enface registration
       python_name: napari_cool_tools_registration._enfaces_registration:enface_registration_plugin
+    - id: napari-cool-tools-registration.bidirectional_ascan_registration
+      title: Bidirectional A-scan registration
+      python_name: napari_cool_tools_registration._bidirectional_ascan_registration:bidirectional_ascan_registration_plugin
+    - id: napari-cool-tools-registration.bidirectional_bscan_registration
+      title: Bidirectional B-scan registration
+      python_name: napari_cool_tools_registration._bidirectional_bscan_registration:bidirectional_bscan_registration_plugin
   widgets:
     - command: napari-cool-tools-registration.adjust_aspect_ratio
       display_name: Adjust Aspect Ratio
@@ -56,3 +62,9 @@ contributions:
     - command: napari-cool-tools-registration.enface_registration
       display_name: Enface registration
       autogenerate: false
+    - command: napari-cool-tools-registration.bidirectional_ascan_registration
+      display_name: Bidirectional A-scan registration
+      autogenerate: true
+    - command: napari-cool-tools-registration.bidirectional_bscan_registration
+      display_name: Bidirectional B-scan registration
+      autogenerate: true
