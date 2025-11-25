@@ -86,7 +86,7 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.volume = None
 
         # Create pyqtgraph image viewer
-        pg.setConfigOption('imageAxisOrder', 'row-major')
+        self.axes = {'x':1, 'y':0} #this is inverse because napari transposes images
         self.viewer = pg.ImageView(parent=self)
         self.viewer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.viewer.updateGeometry()
@@ -105,8 +105,10 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.viewer.ui.histogram.hide()
 
         #show a random image
+        self.first_time = True
         bscan = np.zeros((256, 256))
-        self.viewer.setImage(bscan, autoRange=True, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()])
+        self.viewer.setImage(bscan, autoRange=True, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()],
+                             axes=self.axes)
 
         #connect signals
         self.maxSpinBox.valueChanged.connect(self.updateImage)
@@ -209,20 +211,13 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         new_image_ave = np.array(new_image_ave)
         new_image = np.mean(new_image_ave,axis=0)
 
-        new_image = new_image #normalize by width
+        if self.first_time:
+            self.viewer.setImage(new_image, autoRange=True, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()],
+                                axes=self.axes)
+            self.first_time = False
+        else:
+            self.viewer.setImage(new_image, autoRange=False, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()], axes=self.axes)
 
-        # self.scoreLabel.setText(str(round(blur_score,5)))
-
-        current_size = self.viewer.getImageItem().image.shape # type: ignore
-        next_size = bscan.shape # type: ignore
-        if current_size == next_size:
-            # print("Image size not changed, updating levels only")
-            self.viewer.setImage(new_image, autoRange=False, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()])
-            return
-
-        # print("Image size changed, updating image")
-        self.viewer.setImage(new_image, autoRange=True, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()])
-        return
 
     def get_output_volume(self):
         if self.volume is None:

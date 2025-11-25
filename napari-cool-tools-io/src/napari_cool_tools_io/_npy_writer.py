@@ -23,17 +23,17 @@ def npy_get_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
 
         show_info(f"path: {path}, shape: {data.shape}, attributes: {name}\n")
 
-        # case .prof files should be 3 dimensional
-        if data.ndim == 3:
-            worker = save_numpy(path, data)
-            worker.start()
-            # save_data.tofile(path)
+        # # case .prof files should be 3 dimensional
+        # if data.ndim == 3:
+        worker = save_numpy(path, data)
+        worker.start()
+        # save_data.tofile(path)
 
-            show_info(f"Saving {path}")
-        else:
-            raise ValueError(
-                f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
-            )
+        show_info(f"Saving {path}")
+        # else:
+        #     raise ValueError(
+        #         f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
+        #     )
     else:
         p_path = Path(path)
         p_dir = Path(p_path.parent) / p_path.stem
@@ -47,16 +47,16 @@ def npy_get_writer(path: str, layer_data: list[FullLayerData]) -> List[str]:
 
             show_info(f"path: {out_path}, shape: {data.shape}, attributes: {name}\n")
 
-            # case .prof files should be 3 dimensional
-            if data.ndim == 3:
-                worker = save_numpy(out_path, data)
-                worker.start()
+            # # case .prof files should be 3 dimensional
+            # if data.ndim == 3:
+            worker = save_numpy(out_path, data)
+            worker.start()
 
-                show_info(f"Saving {out_path}")
-            else:
-                raise ValueError(
-                    f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
-                )
+            show_info(f"Saving {out_path}")
+            # else:
+            #     raise ValueError(
+            #         f"File contains {data.ndim}-dimensional data .prof files only support 3-dimensions."
+            #     )
 
     return [path]
 

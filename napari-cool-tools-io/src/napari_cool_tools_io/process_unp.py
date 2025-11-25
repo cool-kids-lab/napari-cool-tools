@@ -677,14 +677,15 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
     indices = meta.sine_frame_indices
     pause_index = indices[::2]
 
-    hires_ratio = meta.sine_hires_ratio
+    hires_ratio = meta.sine_hires_ratio # 3
     hires_h = meta.height*hires_ratio
-    hires_d = 2*hires_ratio
+    hires_d = (indices[1] - indices[0])/hires_ratio
+    hires_d = int(hires_d)
 
     ini_delay = meta.delay
     delay = round((ini_delay/10)*(hires_ratio-1) * 2)
 
-    low_res_depth = meta.depth - len(pause_index)*hires_d*hires_ratio #-  len(pause_index)#5*6*3 = 90 - 5
+    low_res_depth = meta.depth - len(pause_index)*  hires_d*hires_ratio #-  len(pause_index)#5*6*3 = 90 - 5
     print("Low res depth:", low_res_depth)
     
     # read 2 bytes size for uint16

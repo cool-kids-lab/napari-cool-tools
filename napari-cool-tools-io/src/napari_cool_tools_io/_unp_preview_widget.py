@@ -36,6 +36,7 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         # self.indices = None
 
         # Create pyqtgraph image viewer
+        self.axes = {'x':0, 'y':1}
         self.viewer = pg.ImageView(parent=self)
         self.viewer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.viewer.updateGeometry()
@@ -70,7 +71,8 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
 
         #show a random image
         bscan = np.zeros((256, 256))
-        self.viewer.setImage(bscan, autoRange=True, autoLevels = False, levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()])
+        self.viewer.setImage(bscan, autoRange=True, autoLevels = False,
+                              levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()],axes=self.axes)
 
     def updateImage(self, autoLevels=False):
 
@@ -131,9 +133,11 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         next_size = temp_frame.shape # type: ignore
 
         if current_size == next_size:
-            self.viewer.setImage(temp_frame, autoRange=False, autoLevels = autoLevels, levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()])
+            self.viewer.setImage(temp_frame, autoRange=False, autoLevels = autoLevels, 
+                                 levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()], axes=self.axes)
         else:
-            self.viewer.setImage(temp_frame, autoRange=True, autoLevels = autoLevels, levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()])
+            self.viewer.setImage(temp_frame, autoRange=True, autoLevels = autoLevels, 
+                                 levels=[self.minIntensitySpinBox.value(),self.maxIntensitySpinBox.value()], axes=self.axes)
 
     def set_average_frames(self, average_frames:int):
         self.set_frame(self.frameNumberSpinBox.value())
