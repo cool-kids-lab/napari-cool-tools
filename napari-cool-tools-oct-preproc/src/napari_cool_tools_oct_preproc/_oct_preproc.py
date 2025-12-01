@@ -9,6 +9,15 @@ from napari_cool_tools_oct_preproc import OCTACalc
 import numpy as np
 from magicgui import magic_factory
 
+def auto_contrast_plugin(
+    img: Image,
+    lower_percentile: float = 1.0,
+    upper_percentile: float = 99.0,
+):
+    vmin, vmax = np.percentile(img.data, (lower_percentile, upper_percentile))
+    img.contrast_limits = (float(vmin), float(vmax))
+    return
+
 def unwarp_sine_plugin(
     img: Image,
     transpose: bool = False,
