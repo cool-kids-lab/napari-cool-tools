@@ -8,6 +8,9 @@ contributions:
     - id: napari-cool-tools-io.prof_get_reader
       python_name: napari_cool_tools_io._prof_reader:prof_get_reader
       title: Open .prof files
+    - id: napari-cool-tools-io.write_data_prof
+      title: Save Data .prof
+      python_name: napari_cool_tools_io._prof_writer:prof_file_writer
     - id: napari-cool-tools-io.npy_get_reader
       python_name: napari_cool_tools_io._npy_reader:npy_get_reader
       title: Open .npy files
@@ -38,7 +41,15 @@ contributions:
       - points*
       filename_extensions:
       - .npy
-      display_name: Numpy File # shown in file save dialog
+      display_name: Numpy File
+    - command: napari-cool-tools-io.write_data_prof
+      layer_types:
+      - image*
+      - labels*
+      filename_extensions:
+      - .prof
+      display_name: Napari Data
+
   # widgets:
   #   - command: napari-cool-tools-io.convert_unp_prof
   #     display_name: Convert UNP to Prof

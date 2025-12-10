@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 from napari.utils.notifications import show_info
+from napari.layers import Layer
 
 data_element_size = 4  # number of bytes per data element f32 == 4 bytes
 
@@ -280,4 +281,9 @@ def prof_file_reader(path):
     show_info(
         f"layer_name: {file_name}, shape: {display.shape}, dtype: {display.dtype}, layer type: {layer_type}\n"  # bmscan: {bmscan},
     )
-    return [(display, add_kwargs, layer_type)]
+
+    output_layer = Layer.create(display, add_kwargs, layer_type)
+    vmin, vmax = np.percentile(display, (1, 99))
+    output_layer.contrast_limits = (float(vmin), float(vmax))
+
+    return [output_layer]
