@@ -384,7 +384,7 @@ def unpack12_torch(buf: torch.Tensor) -> torch.Tensor:
     return out.to(dtype=torch.float32)  # or torch.uint16 if unsigned
 
 
-def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
+def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, flip_coeffs:bool=False) -> np.ndarray:
 
     show_info("Starting unp file processing...")
     
@@ -408,6 +408,39 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
         # hamming_signal = subtracted_signal * hamming
 
         dispMaxOrder = 3
+
+        # auto dispersion
+        if auto_dispersion:
+            # move to center frame in binary file
+            byte_reader.seek(int(data_size_bytes) * int(meta.depth/2), 0)
+
+            if meta.packed:
+                raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
+                raw_data = torch.tensor(raw_data).to(device)
+                raw = unpack12_torch(raw_data)
+                raw = raw.reshape((meta.height, meta.width))
+            else:
+                raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
+                raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
+                raw = torch.tensor(raw).to(device)
+
+            if meta.dcSubtract:
+            # Subtract the DC signal
+                subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+            else:
+                subtracted_signal = raw
+
+            # Hamming windowing
+            hamming_signal = subtracted_signal * hamming
+
+            dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
+            c2,c3 = dispersion_coeffs.cpu().numpy()
+            if flip_coeffs:
+                if c2 < 0:
+                    c2 = c2 * -1
+                    c3 = c3 * -1
+            meta.c2 = int(c2)
+            meta.c3 = int(c3)
 
         dispCoeffs = torch.tensor([meta.c2, meta.c3], device=device) #disable dispersion compensation
 
