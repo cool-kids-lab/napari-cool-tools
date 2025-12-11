@@ -266,8 +266,8 @@ def prof_file_reader(path):
 
     # transpose array so that x and y are switched then flip array
     # to better orient b-scans for manual segmentation
-    display = b_scan.transpose(0, 2, 1)
-    display = np.flip(b_scan.transpose(0, 2, 1), 1)
+    # display = b_scan.transpose(0, 2, 1)
+    display = np.flip(b_scan.transpose(0, 2, 1), 1).copy()
 
     # optional kwargs for viewer.add_* method
     add_kwargs = {"name": file_name}
