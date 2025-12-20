@@ -297,7 +297,7 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
     
     # Avoid edges
     # roi_oct = toct[:, 49 : int(data_disp_comp.shape[1] / 2) - 50]#this is the positive half
-    roi_oct = toct[:, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
+    roi_oct = toct[50:-50, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
     
     # Normalize
     norm_oct = roi_oct / torch.sum(roi_oct)
@@ -384,7 +384,7 @@ def unpack12_torch(buf: torch.Tensor) -> torch.Tensor:
     return out.to(dtype=torch.float32)  # or torch.uint16 if unsigned
 
 
-def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
+def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False) -> np.ndarray:
 
     show_info("Starting unp file processing...")
     
@@ -409,6 +409,60 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
 
         dispMaxOrder = 3
 
+        # auto dispersion
+        if auto_dispersion:
+            # move to center frame in binary file
+            byte_reader.seek(int(data_size_bytes) * int(meta.depth/2), 0)
+
+            if meta.packed:
+                raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
+                if raw_data.size == 0:
+                    pass
+
+                else:
+                    raw_data = torch.tensor(raw_data).to(device)
+                    raw = unpack12_torch(raw_data)
+                    raw = raw.reshape((meta.height, meta.width))
+
+                    if meta.dcSubtract:
+                    # Subtract the DC signal
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                    else:
+                        subtracted_signal = raw
+
+                    # Hamming windowing
+                    hamming_signal = subtracted_signal * hamming
+
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
+                    c2,c3 = dispersion_coeffs.cpu().numpy()
+                    meta.c2 = int(c2)
+                    meta.c3 = int(c3)
+
+
+            else:
+                raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
+                if raw_data.size == 0:
+                    pass
+
+                else:
+                    raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
+                    raw = torch.tensor(raw).to(device)
+
+                    if meta.dcSubtract:
+                    # Subtract the DC signal
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                    else:
+                        subtracted_signal = raw
+
+                    # Hamming windowing
+                    hamming_signal = subtracted_signal * hamming
+
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
+                    c2,c3 = dispersion_coeffs.cpu().numpy()
+                    meta.c2 = int(c2)
+                    meta.c3 = int(c3)
+
+
         dispCoeffs = torch.tensor([meta.c2, meta.c3], device=device) #disable dispersion compensation
 
         byte_reader.seek(0, 0)
@@ -418,11 +472,15 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
+                if raw_data.size == 0:
+                    continue
                 raw_data = torch.tensor(raw_data).to(device)
                 raw = unpack12_torch(raw_data)
                 raw = raw.reshape((meta.height, meta.width))
             else:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
+                if raw_data.size == 0:
+                    continue
                 raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
                 raw = torch.tensor(raw).to(device)
 
@@ -486,196 +544,15 @@ def process_unp(unp_file_path:Path, meta: unp_meta) -> np.ndarray:
     
     return oct_vol_array
 
-# def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarray, np.ndarray]:
 
-#     show_info("Starting unp file processing.")
-
-#     indices = meta.sine_frame_indices
-#     pause_index = indices[::2]
-
-#     hires_ratio = meta.sine_hires_ratio
-#     hires_h = meta.height*hires_ratio
-#     hires_d = 2*hires_ratio
-
-#     ini_delay = meta.delay
-#     delay = round((ini_delay/10)*(hires_ratio-1) * 2)
-
-#     low_res_depth = meta.depth - len(pause_index)*hires_d*hires_ratio
-    
-#     # read 2 bytes size for uint16
-#     if meta.packed:
-#         data_size_bytes = int(1.5 * meta.width * meta.height)
-#     else:
-#         data_size_bytes = 2 * meta.width * meta.height
-
-#     if meta.full_range:
-#         oct_vol_array = torch.zeros((low_res_depth, meta.height, meta.width), dtype=torch.float32).to(device)
-#         oct_vol_array_hires = torch.zeros((hires_d*len(pause_index), hires_h, meta.width), dtype=torch.float32).to(device)
-
-#     else:
-#         oct_vol_array = torch.zeros((low_res_depth, meta.height, int(meta.width/2)), dtype=torch.float32).to(device)
-#         oct_vol_array_hires = torch.zeros((hires_d*len(pause_index), hires_h, int(meta.width/2)), dtype=torch.float32).to(device)
-
-#     # open file
-#     with open(unp_file_path, "rb", buffering=0) as byte_reader:
-        
-#         # 1D Hamming window (like np.hamming)
-#         hamming = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
-#         hamming = hamming.unsqueeze(0).repeat(meta.height, 1)
-#         # hamming_signal = subtracted_signal * hamming
-
-#         hamming_hires = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
-#         hamming_hires = hamming_hires.unsqueeze(0).repeat(hires_h, 1)
-
-#         dispMaxOrder = 3
-
-#         dispCoeffs = torch.tensor([meta.c2, meta.c3], device=device) #disable dispersion compensation
-
-#         frame_counter = 0
-#         frame_counter_lowres = 0
-#         frame_counter_hires = 0
-
-#         pause_index_lowres = []
-
-#         byte_reader.seek(0,0) #reset to beginning of file
-        
-#         # Main OCT Volume process
-#         for _ in tqdm(range(0, low_res_depth), desc="Processing Bscans"):
-
-#             if frame_counter in pause_index:
-#                 for _ in range(hires_d):
-#                     if meta.packed:
-#                         raw_data = np.frombuffer(byte_reader.read(data_size_bytes * hires_ratio), dtype="<u1")
-#                         raw_data = torch.tensor(raw_data).to(device)
-#                         raw = unpack12_torch(raw_data)
-#                         raw = raw.reshape((hires_h, meta.width))
-#                     else:
-#                         raw_data = np.frombuffer(byte_reader.read(data_size_bytes*hires_ratio), dtype=np.uint16)
-#                         raw = raw_data.reshape((hires_h, meta.width)).astype(np.float32)
-#                         raw = torch.tensor(raw).to(device)
-
-#                     if meta.dcSubtract:
-#                     # Subtract the DC signal
-#                         subtracted_signal = dc_subtraction_double_sweep_torch(raw)
-#                     else:
-#                         subtracted_signal = raw
-
-#                     # Hamming windowing
-#                     hamming_signal = subtracted_signal * hamming_hires
-
-#                     img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffs)
-
-#                     # Fourier Transform
-#                     fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
-
-#                     if meta.full_range:
-#                         temp_frame = torch.abs(fft_signal)  # full range
-#                     else:
-#                         temp_frame = torch.abs(fft_signal[:, int(fft_signal.shape[1] / 2):])  # take the negative part
-
-#                     if meta.log_scale:
-#                         temp_frame = 20 * torch.log10(temp_frame + 1e-6)  # Add a small value to avoid log(0)
-
-#                     oct_vol_array_hires[frame_counter_hires] = temp_frame
-
-#                     frame_counter_hires += 1
-
-#                 pause_index_lowres.append(frame_counter_lowres)
-
-#                 frame_counter += hires_d*hires_ratio 
-#                 frame_counter_lowres += 1
-
-#                 continue
-            
-#             else:
-#                 if meta.packed:
-#                     raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
-#                     raw_data = torch.tensor(raw_data).to(device)
-#                     raw = unpack12_torch(raw_data)
-#                     raw = raw.reshape((meta.height, meta.width))
-#                 else:
-#                     raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
-#                     raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
-#                     raw = torch.tensor(raw).to(device)
-
-#                 # Subtract the DC signal
-#                 if meta.dcSubtract:
-#                 # Subtract the DC signal
-#                     subtracted_signal = dc_subtraction_double_sweep_torch(raw)
-#                 else:
-#                     subtracted_signal = raw
-
-#                 # Hamming windowing
-#                 hamming_signal = subtracted_signal * hamming
-                
-#                 img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffs)
-
-#                 # Fourier Transform
-#                 fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
-
-#                 if meta.full_range:
-#                     temp_frame = torch.abs(fft_signal) #full range
-#                 else:
-#                     temp_frame = torch.abs(fft_signal[:, int(fft_signal.shape[1] / 2):]) #take the negative part
-
-#                 if meta.log_scale:
-#                     temp_frame = 20 * torch.log10(temp_frame + 1e-6)  # Add a small value to avoid log(0)
-
-#                 # #double side on purpose
-#                 # if frame_counter % 2:
-#                 #     temp_frame = torch.flip(temp_frame, [0])#horizontal flip  
-
-#                 oct_vol_array[frame_counter_lowres] = temp_frame
-
-#                 frame_counter_lowres += 1
-#                 frame_counter += 1
-
-
-#     #add delay to the high-res frames    
-#     for i in range(len(pause_index)):
-#         idx1 = i*hires_d
-#         idx2 = idx1 + hires_d
-#         # take a cloned block of 6 high-resolution b-scans and flatten (concatenate) along the first axis
-#         hires_block = oct_vol_array_hires[idx1:idx2].clone()
-#         hires_bscan = hires_block.reshape(-1, hires_block.shape[2])
-
-#         # roll and reshape back to (hires_d, hires_h, width) using torch
-#         hires_bscan = torch.roll(hires_bscan, shifts=(delay, 0), dims=(0, 1))
-#         hires_bscan = hires_bscan.reshape((hires_d, hires_h, hires_block.shape[2]))
-#         oct_vol_array_hires[idx1:idx2] = hires_bscan
-
-#         # # resize first image and insert back to the low-res volume
-#         # temp_frame = hires_bscan[0]  # take the first B-scan for resizing
-#         # temp_frame = temp_frame.unsqueeze(0).unsqueeze(0)
-#         # resized = F.interpolate(temp_frame, size=(meta.height, temp_frame.shape[-1]), mode="bilinear", align_corners=False)
-#         # resized = resized.squeeze(0).squeeze(0)
-#         # oct_vol_array[pause_index_lowres[i]] = resized
-    
-#     #double side the high-res volume
-#     if meta.double_side:
-#         oct_vol_array_hires[1::2, :, :] = torch.flip(oct_vol_array_hires[1::2, :, :], dims=[1])
-
-#     #double side the low-res volume
-#     if meta.double_side:
-#         # reverse the height axis for every odd B-scan (works for torch.Tensor)
-#         oct_vol_array[1::2, :, :] = torch.flip(oct_vol_array[1::2, :, :], dims=[1])
-
-#     oct_vol_array, oct_vol_array_hires = oct_vol_array.cpu().numpy(), oct_vol_array_hires.cpu().numpy()
-
-#     # Clear cache to free up memory
-#     if device.type == 'cuda':
-#         torch.cuda.empty_cache()
-
-#     show_info("Finished unp file processing.")
-    
-#     return oct_vol_array, oct_vol_array_hires
-
-def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarray, np.ndarray]:
+def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_lowres=True) -> tuple[np.ndarray, np.ndarray]:
 
     show_info("Starting unp file processing.")
 
     indices = meta.sine_frame_indices
     pause_index = indices[::2]
+
+    print("Pause indices:", pause_index)
 
     hires_ratio = meta.sine_hires_ratio # 3
     hires_h = meta.height*hires_ratio
@@ -685,7 +562,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
     ini_delay = meta.delay
     delay = round((ini_delay/10)*(hires_ratio-1) * 2)
 
-    low_res_depth = meta.depth - len(pause_index)*  hires_d*hires_ratio #-  len(pause_index)#5*6*3 = 90 - 5
+    low_res_depth = meta.depth - len(pause_index) *  hires_d * hires_ratio # - 5 * 6 * 3 = 90 - 5
     print("Low res depth:", low_res_depth)
     
     # read 2 bytes size for uint16
@@ -724,7 +601,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
         byte_reader.seek(0,0) #reset to beginning of file
         
         # Main OCT Volume process
-        for _ in tqdm(range(0, low_res_depth), desc="Processing Bscans"):
+        for _ in tqdm(range(0, low_res_depth+len(pause_index)), desc="Processing Bscans"):
 
             if frame_counter in pause_index:
                 for _ in range(hires_d):
@@ -831,6 +708,14 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta) -> tuple[np.ndarr
     if meta.desine:
         oct_vol_array = desine(oct_vol_array, mode="bilinear", transpose=False, scale_fac=2)
         oct_vol_array_hires = desine(oct_vol_array_hires, mode="bilinear", transpose=False, scale_fac=2)
+
+    if include_hires_in_lowres:
+        target_size = oct_vol_array[0].shape
+        for i in range(len(pause_index)):
+            idx = pause_index[i] - i*hires_d*hires_ratio + i
+            temp_frame = oct_vol_array_hires[i*hires_d].unsqueeze(0)
+            temp_frame = F.interpolate(temp_frame.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
+            oct_vol_array = torch.cat((oct_vol_array[:idx], temp_frame, oct_vol_array[idx:]), dim=0)
 
     oct_vol_array, oct_vol_array_hires = oct_vol_array.cpu().numpy(), oct_vol_array_hires.cpu().numpy()
 

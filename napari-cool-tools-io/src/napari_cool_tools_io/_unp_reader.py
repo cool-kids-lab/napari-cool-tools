@@ -124,8 +124,13 @@ def unp_proc_meta(path) -> unp_meta | None:
         meta.delay = config.getint('Scanning', 'XDelay')
 
         if meta.pattern == "Sine_Pause":
-            meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
-            meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
+
+            if config.has_option('Scanning', 'Sine_Pause_Frame_Index'):
+                meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
+                meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
+            else:
+                meta.sine_frame_indices = [236, 254, 282, 300, 330, 348, 378, 396, 426, 444]
+                meta.sine_hires_ratio = 3
 
         dialog = Unp_Preview_Widget()
         dialog.set_unp_path(Path(path), meta)

@@ -13,10 +13,35 @@ def auto_contrast_plugin(
     img: Image,
     lower_percentile: float = 1.0,
     upper_percentile: float = 99.0,
+    num_averages: int = 1,
 ):
-    vmin, vmax = np.percentile(img.data, (lower_percentile, upper_percentile))
-    img.contrast_limits = (float(vmin), float(vmax))
-    return
+    vol = img.data
+    n = num_averages
+
+    if n == 0:
+        n = 1
+    
+    if vol.ndim == 3:
+        center = vol.shape[0] // 2
+
+        half = n // 2
+        if n % 2 == 1:  # odd
+            temp_frame = vol[center-half : center+half+1]
+        else:           # even
+            temp_frame = vol[center-half : center+half]
+
+        temp_frame = np.mean(temp_frame, axis=0)
+        vmin, vmax = np.percentile(temp_frame, (lower_percentile, upper_percentile))
+        img.contrast_limits = (float(vmin), float(vmax))
+
+    elif vol.ndim == 2:
+        vmin, vmax = np.percentile(vol, (lower_percentile, upper_percentile))
+        img.contrast_limits = (float(vmin), float(vmax))
+    else:
+        show_error("Input image must be 2D or 3D.")
+        return
+
+
 
 def unwarp_sine_plugin(
     img: Image,
