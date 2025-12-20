@@ -435,6 +435,12 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
                     dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
                     c2,c3 = dispersion_coeffs.cpu().numpy()
+                    
+                    if flip_coeffs:
+                        if c2 < 0:
+                            c2 = c2 * -1
+                            c3 = c3 * -1
+                            
                     meta.c2 = int(c2)
                     meta.c3 = int(c3)
 
@@ -459,6 +465,12 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
                     dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
                     c2,c3 = dispersion_coeffs.cpu().numpy()
+                    
+                    if flip_coeffs:
+                        if c2 < 0:
+                            c2 = c2 * -1
+                            c3 = c3 * -1
+
                     meta.c2 = int(c2)
                     meta.c3 = int(c3)
 
