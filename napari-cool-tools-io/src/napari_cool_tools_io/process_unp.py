@@ -384,7 +384,7 @@ def unpack12_torch(buf: torch.Tensor) -> torch.Tensor:
     return out.to(dtype=torch.float32)  # or torch.uint16 if unsigned
 
 
-def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False) -> np.ndarray:
+def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, flip_coeffs:bool=False) -> np.ndarray:
 
     show_info("Starting unp file processing...")
     

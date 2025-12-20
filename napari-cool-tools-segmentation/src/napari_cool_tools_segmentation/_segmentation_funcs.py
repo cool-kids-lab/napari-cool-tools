@@ -490,11 +490,14 @@ def bscan_onnx_deconj_func(
         PadToTargetM,
         ResizeToFit,
     )
+    from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_range_func
     from torch.utils.data import DataLoader
     from torchvision.transforms.functional import InterpolationMode
     from torchvision.transforms.v2.functional import resize
 
     data = data.transpose(-3, -1, -2)  # transpose back to original OCT coordinate system
+    # normalize the data
+    data = normalize_data_in_range_func(data)
 
     target_shape = target_bscan_dimension  # (512, 1024)
     init_shape = (data.shape[-2], data.shape[-1])
@@ -539,7 +542,7 @@ def bscan_onnx_deconj_func(
     pred_trans = nn.Sequential(
         ResizeToFit(target_shape),
         PadToTargetM(**pttm_params),
-        Normalize(),  # Standardize(),Normalize(),
+        #Normalize(),  # Standardize(),Normalize(),
     )
 
     pred_ds = LoadNumpyData(
