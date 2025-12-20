@@ -1,7 +1,41 @@
+from napari.layers import Image
 import torch
 import math
 import torch.nn.functional as F
 from napari_cool_tools_oct_preproc import Operation
+
+def auto_contrast(
+    img: Image,
+    lower_percentile: float = 1.0,
+    upper_percentile: float = 99.0,
+    num_averages: int = 1,
+):
+    vol = img.data
+    n = num_averages
+
+    if n == 0:
+        n = 1
+    
+    if vol.ndim == 3:
+        center = vol.shape[0] // 2
+
+        half = n // 2
+        if n % 2 == 1:  # odd
+            temp_frame = vol[center-half : center+half+1]
+        else:           # even
+            temp_frame = vol[center-half : center+half]
+
+        temp_frame = np.mean(temp_frame, axis=0)
+        vmin, vmax = np.percentile(temp_frame, (lower_percentile, upper_percentile))
+        img.contrast_limits = (float(vmin), float(vmax))
+
+    elif vol.ndim == 2:
+        vmin, vmax = np.percentile(vol, (lower_percentile, upper_percentile))
+        img.contrast_limits = (float(vmin), float(vmax))
+    else:
+        show_error("Input image must be 2D or 3D.")
+        return
+
 
 def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 2) -> torch.Tensor:
     def desine_torch_2D(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
@@ -75,6 +109,26 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
 
         y = torch.zeros_like(frame)
 
+        _,H, W = y.shape  # now W is sine-sampled axis
+        W = W * scale_fac
+
+        # --- Build inverse mapping from uniform output index j -> sine-sampled source index n_src ---
+        # grid_sample with align_corners=True interprets indices in [0..W-1] mapped to [-1..1] by:  g = 2*i/(W-1)-1
+        Wm1 = float(W - 1)
+        j = torch.linspace(0.0, Wm1, W, device=frame.device)                  # uniform target coords
+        # inverse of: y_org = (Wm1/2) * sin(theta) + (Wm1/2), with theta = (pi/Wm1)*n - pi/2
+        # Solve for n given y=j:
+        arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)                             # in [-1, 1]
+        arg = torch.clamp(arg, -1.0, 1.0)                               # numeric safety
+        theta = torch.arcsin(arg)                                       # [-pi/2, pi/2]
+        n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)               # source index in [0..W-1]
+        grid_x = (2.0 * n_src / Wm1) - 1.0                              # normalize to [-1, 1]
+
+        # Tile across rows; y stays linear (identity)
+        grid_x = grid_x.unsqueeze(0).repeat(H, 1)                       # [H, W]
+        grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device).unsqueeze(1).repeat(1, W)  # [H, W]
+        grid = torch.stack((grid_x, grid_y), dim=-1).unsqueeze(0)       # [1, H, W, 2]
+
         for i, x in enumerate(frame):
 
             # add batch/channel dims: [N,C,H,W]
@@ -87,25 +141,6 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
                 mode='bilinear',
                 align_corners=False
             )
-
-            _,_,H, W = x.shape  # now W is sine-sampled axis
-
-            # --- Build inverse mapping from uniform output index j -> sine-sampled source index n_src ---
-            # grid_sample with align_corners=True interprets indices in [0..W-1] mapped to [-1..1] by:  g = 2*i/(W-1)-1
-            Wm1 = float(W - 1)
-            j = torch.linspace(0.0, Wm1, W, device=frame.device)                  # uniform target coords
-            # inverse of: y_org = (Wm1/2) * sin(theta) + (Wm1/2), with theta = (pi/Wm1)*n - pi/2
-            # Solve for n given y=j:
-            arg = (j - Wm1 * 0.5) / (Wm1 * 0.5)                             # in [-1, 1]
-            arg = torch.clamp(arg, -1.0, 1.0)                               # numeric safety
-            theta = torch.arcsin(arg)                                       # [-pi/2, pi/2]
-            n_src = (theta + math.pi * 0.5) * (Wm1 / math.pi)               # source index in [0..W-1]
-            grid_x = (2.0 * n_src / Wm1) - 1.0                              # normalize to [-1, 1]
-
-            # Tile across rows; y stays linear (identity)
-            grid_x = grid_x.unsqueeze(0).repeat(H, 1)                       # [H, W]
-            grid_y = torch.linspace(-1.0, 1.0, H, device=frame.device).unsqueeze(1).repeat(1, W)  # [H, W]
-            grid = torch.stack((grid_x, grid_y), dim=-1).unsqueeze(0)       # [1, H, W, 2]
 
             # Sample (bilinear = linear along each axis; zeros outside)
             x = F.grid_sample(
