@@ -416,7 +416,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
-                if raw_data.size == 0:
+                if raw_data.size <= meta.height * meta.width:
                     pass
 
                 else:
@@ -447,7 +447,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
             else:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
-                if raw_data.size == 0:
+                if raw_data.size <= meta.height * meta.width:
                     pass
 
                 else:
@@ -484,14 +484,14 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
-                if raw_data.size == 0:
+                if raw_data.size < meta.height * meta.width:
                     continue
                 raw_data = torch.tensor(raw_data).to(device)
                 raw = unpack12_torch(raw_data)
                 raw = raw.reshape((meta.height, meta.width))
             else:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
-                if raw_data.size == 0:
+                if raw_data.size < meta.height * meta.width:
                     continue
                 raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
                 raw = torch.tensor(raw).to(device)

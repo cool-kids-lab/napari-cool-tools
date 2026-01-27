@@ -129,19 +129,19 @@ def generate_enface_thread(
 def generate_pseudocolor_enface_plugin(
     img: Layer,
     desine_unwarp: bool = False,
-    crop: int = 10,
+    crop: int = 10, blue_blend: bool = True
 ):      
     if img.data.ndim != 3:
         show_error("Input volume must be 3D.")
         return
 
-    generate_pseudocolor_enface_thread(img=img, desine_unwarp=desine_unwarp, crop=crop)
+    generate_pseudocolor_enface_thread(img=img, desine_unwarp=desine_unwarp, crop=crop, blue_blend=blue_blend)
 
 
 @thread_worker(connect={"yielded": viewer.add_layer})
 def generate_pseudocolor_enface_thread(img: Layer,
     desine_unwarp: bool = False,
-    crop: int = 0,
+    crop: int = 0, blue_blend: bool = True
     ):
     
 
@@ -157,27 +157,50 @@ def generate_pseudocolor_enface_thread(img: Layer,
         if device.type == 'cuda':
             torch.cuda.empty_cache()
 
-    output_max = projection(data=data, axis=ProjectionDir.EN_FACE.value, projection_type=ProjectionType.MAX.value,crop=crop)
-    output_max = np.log10(output_max + 1e-6)  # log scale
-
-    vmin, vmax = np.percentile(output_max, (1, 99))
-    output_max = np.clip(output_max, vmin, vmax)
-    output_max = (output_max - vmin) / (vmax - vmin)
-
     output_mean = projection(data=data, axis=ProjectionDir.EN_FACE.value, projection_type=ProjectionType.MEAN.value,crop=crop)
-    vmin, vmax = np.percentile(output_mean, (1, 99))
+    vmin, vmax = np.percentile(output_mean, (5, 99))
     output_mean = np.clip(output_mean, vmin, vmax)
     output_mean = (output_mean - vmin) / (vmax - vmin)
 
-    # --- RGB with blue = 0 ---
-    output_rgb = np.stack(
-        [
-            output_max,              # R
-            output_mean,             # G
-            np.zeros_like(output_max)  # B
-        ],
-        axis=-1,
-    ).astype(np.float32)
+
+    # output_max = projection(data=data, axis=ProjectionDir.EN_FACE.value, projection_type=ProjectionType.MAX.value,crop=crop)
+    # output_max = np.log10(output_max + 1e-6)  # log scale
+
+    #1 (Choose One option to generate enface max) generate enface max projection by iterative max selection
+    output_max = np.zeros_like(output_mean)
+
+    display = data.copy()
+
+    H, D, C = display.shape
+    row_idx = np.arange(H)[:, None]
+    chan_idx = np.arange(C)[None, :]
+
+    for i in range(20):
+        indices = np.argmax(display, axis=1)
+        output_max += display[row_idx, indices, chan_idx]
+        display[row_idx, indices, chan_idx] = -np.inf
+    
+    output_max = output_max / 20
+
+    vmin, vmax = np.percentile(output_max, (5, 99))
+    output_max = np.clip(output_max, vmin, vmax)
+    output_max = (output_max - vmin) / (vmax - vmin)
+
+    if blue_blend:
+        #generate pseudo color image blend with blue color blend
+        B = output_max*0.4
+        G = output_max*0.5 + output_mean*0.2
+        R = output_mean
+    else:
+        # generate pseudo color image blend without blue color blend
+        B = np.zeros_like(output_max)
+        G = output_max*0.5 + output_mean*0.2
+        R = output_mean
+        
+    output_rgb = np.stack([R, G, B], axis=-1)   # (H, W, 3)
+
+    output_rgb = (output_rgb * 255).astype(np.uint8)
+
 
     yield Layer.create(
         output_rgb,
