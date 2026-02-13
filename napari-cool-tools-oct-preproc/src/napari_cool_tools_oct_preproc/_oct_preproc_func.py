@@ -1,8 +1,10 @@
 from napari.layers import Image
 import torch
+import numpy as np
 import math
 import torch.nn.functional as F
 from napari_cool_tools_oct_preproc import Operation
+from napari_cool_tools_img_proc._normalization_funcs import normalize_data_in_range_func
 
 def auto_contrast(
     img: Image,
@@ -37,8 +39,8 @@ def auto_contrast(
         return
 
 
-def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 2) -> torch.Tensor:
-    def desine_torch_2D(frame: torch.Tensor, mode = "bilinear", transpose: bool = True) -> torch.Tensor:
+def desine(frame: torch.Tensor, mode = "bilinear", align_corners: bool = False, transpose: bool = True, scale_fac: int = 2) -> torch.Tensor:
+    def desine_torch_2D(frame: torch.Tensor, mode = "bilinear", align_corners: bool = False, transpose: bool = True) -> torch.Tensor:
         """
         Regrid a 2D array from sine-spaced samples to uniform (linspace) along the chosen axis.
         Uses F.grid_sample with an analytically derived inverse mapping.
@@ -80,7 +82,7 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
 
         # Sample (bilinear = linear along each axis; zeros outside)
         y = F.grid_sample(
-            x, grid, mode=mode, padding_mode="zeros", align_corners=True
+            x, grid, mode=mode, padding_mode="zeros", align_corners=align_corners
         ).squeeze(0).squeeze(0)  # [H, W]
 
         if transpose:
@@ -88,7 +90,7 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
 
         return y
 
-    def desine_torch_3d(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale_fac: int = 1) -> torch.Tensor:
+    def desine_torch_3d(frame: torch.Tensor, mode = "bilinear", align_corners: bool = False, transpose: bool = True, scale_fac: int = 1) -> torch.Tensor:
         """
         Regrid a 3D volume from sine-spaced samples to uniform (linspace)
         along the chosen axis (0, 1, or 2).
@@ -102,7 +104,13 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
             3D tensor [D, H, W] after resampling to uniform spacing.
         """
         # move to float32 for F.grid_sample
+        interp_mode = "bilinear"
+        if mode == "nearest":
+            interp_mode = "nearest-exact"
+        else:
+            interp_mode = mode
 
+        print(f"Grid smaple mode: {mode} with interpolation mode: {interp_mode}")
                     # permute so sine-axis becomes last (W)
         if transpose:
             frame = frame.permute(0, 2, 1)  # H,W,D [800,800,1024] -> [800,1024,800]
@@ -135,25 +143,43 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
             x = x.unsqueeze(0).unsqueeze(0)
 
             #up sample image
-            x = torch.nn.functional.interpolate(
-                x,
-                scale_factor=(1.0, scale_fac),  # explicit output size
-                mode='bilinear',
-                align_corners=False
-            )
+            if interp_mode not in ("area","nearest","nearest-exact"):
+                x = torch.nn.functional.interpolate(
+                    x,
+                    scale_factor=(1.0, scale_fac),  # explicit output size
+                    mode=interp_mode,
+                    # mode='bilinear',
+                    align_corners=False
+                )
+            else:
+                x = torch.nn.functional.interpolate(
+                    x,
+                    scale_factor=(1.0, scale_fac),  # explicit output size
+                    mode=interp_mode,
+                    # mode='bilinear',
+                )
 
             # Sample (bilinear = linear along each axis; zeros outside)
             x = F.grid_sample(
-                x, grid, mode=mode, padding_mode="zeros", align_corners=True
+                x, grid, mode=mode, padding_mode="zeros", align_corners=align_corners
             )
 
             #down sample image
-            x = torch.nn.functional.interpolate(
-                x,
-                scale_factor=(1.0, 1.0/scale_fac),  # explicit output size
-                mode='bilinear',
-                align_corners=False
-            )
+            if interp_mode not in ("area","nearest","nearest-exact"):
+                x = torch.nn.functional.interpolate(
+                    x,
+                    scale_factor=(1.0, 1.0/scale_fac),  # explicit output size
+                    mode=interp_mode,
+                    # mode='bilinear',
+                    align_corners=False
+                )
+            else:
+                    x = torch.nn.functional.interpolate(
+                    x,
+                    scale_factor=(1.0, 1.0/scale_fac),  # explicit output size
+                    mode=interp_mode,
+                    # mode='bilinear',
+                )
 
             y[i] = x.squeeze(0).squeeze(0)  # [D,H,W]
 
@@ -165,9 +191,9 @@ def desine(frame: torch.Tensor, mode = "bilinear", transpose: bool = True, scale
         return y
 
     if frame.dim() == 2:
-        return desine_torch_2D(frame, mode=mode, transpose=transpose)
+        return desine_torch_2D(frame, mode=mode, align_corners=align_corners, transpose=transpose)
     elif frame.dim() == 3:
-        return desine_torch_3d(frame, mode=mode, transpose=transpose, scale_fac=scale_fac)
+        return desine_torch_3d(frame, mode=mode, align_corners=align_corners,transpose=transpose, scale_fac=scale_fac)
 
 from napari_cool_tools_io import device
 from napari_cool_tools_oct_preproc import OCTACalc 

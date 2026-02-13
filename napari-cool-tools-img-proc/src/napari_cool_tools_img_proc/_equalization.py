@@ -13,6 +13,7 @@ from napari_cool_tools_img_proc._equalization_funcs import (
     clahe_func,
     clahe_pt_func,
     init_bscan_preproc,
+    init_bscan_preproc_pt,
 )
 
 
@@ -22,6 +23,7 @@ def init_bscan_preproc_plugin(
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
     dtype: DType = DType.NP_FLOAT32,
+    use_accelerator: bool = True,
 ):
     """
     Args:
@@ -34,6 +36,7 @@ def init_bscan_preproc_plugin(
         min_intensity=min_intensity,
         max_intensity=max_intensity,
         dtype=dtype,
+        use_accelerator=use_accelerator,
     )
     return
 
@@ -45,6 +48,7 @@ def init_bscan_preproc_thread(
     min_intensity: float = 0.0,
     max_intensity: float = 1.0,
     dtype: DType = DType.NP_FLOAT32,
+    use_accelerator = True,
 ) -> Layer:
     """
     Args:
@@ -57,13 +61,24 @@ def init_bscan_preproc_thread(
     layer_type = "image"
     add_kwargs = {"name": f"{name}"}
 
-    proc_data = init_bscan_preproc(
+    proc_data = init_bscan_preproc_pt(
         img=img.data,
         num_std=num_std,
         min_intensity=min_intensity,
         max_intensity=max_intensity,
         dtype=dtype,
+        use_accelerator=use_accelerator,
+        numpy_out=True,
+        verbose=False,
     )
+
+    # proc_data = init_bscan_preproc(
+    #     img=img.data,
+    #     num_std=num_std,
+    #     min_intensity=min_intensity,
+    #     max_intensity=max_intensity,
+    #     dtype=dtype,
+    # )
 
     layer = Layer.create(proc_data, add_kwargs, layer_type)
 

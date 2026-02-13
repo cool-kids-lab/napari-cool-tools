@@ -92,7 +92,7 @@ def morphological_erosion(
     Raises:
     """
     prev_type = data.dtype
-    data_t = torch.tensor(data.copy()).to(torch.float32)
+    data_t = torch.as_tensor(data,dtype=torch.float)
 
     dims_needed = 4 - data_t.ndim
     if dims_needed < 4:
@@ -121,7 +121,7 @@ def morphological_erosion(
     print(f"data_t shape: {data_t.shape}\n")
 
     if data_t.ndim == 1 or volumetric_calc:
-        out_data_t = morph.erosion(data_t, kernel).squeeze()
+        out_data_t = morph.erosion(data_t, kernel,border_type="constant").squeeze()
     else:
         out_data_t = torch.zeros_like(data_t)
         #for i in tqdm(range(data_t.shape[-3]), desc="Eroding"):

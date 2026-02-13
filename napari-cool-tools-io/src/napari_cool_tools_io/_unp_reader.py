@@ -73,6 +73,7 @@ def unp_proc_meta(path) -> unp_meta | None:
     - If no .ini file is found but an .xml file exists, parses the XML and extracts:
         * Volume_Size attributes: Height -> height, Width -> width, Number_of_Frames -> depth
         * Scanning_Parameters attribute: Number_of_BM_scans -> bmscan
+        * reference arm motor position offset: Motor_pos -> motor_position
       When only XML is used, vista, packed, double_side and pattern remain None.
     - If both files exist, the .ini file takes precedence (checked first).
     - If neither file exists, returns None.
@@ -117,6 +118,8 @@ def unp_proc_meta(path) -> unp_meta | None:
         meta.height = config.getint('General', 'HEIGHT')
         meta.depth = config.getint('General', 'FRAMES')
         meta.bmscan = config.getint('OCTA', 'BMScan')
+        # TODO acquire motor_position from .ini file
+        # meta.motor_position = config.getint('Motor_Control', 'Current') confirm with Yakub
         meta.vista = config.getint('Scanning', 'VISTA_Num')
         meta.packed = config.getboolean('Acquisition', 'PACKED12')
         meta.double_side = config.getboolean('Scanning', 'Bidirectional')
@@ -158,6 +161,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"height: {meta.height}")
             print(f"depth: {meta.depth}")
             print(f"bmscan: {meta.bmscan}")
+            print(f"motor position: {meta.motor_position}")
             print(f"vista: {meta.vista}")
             print(f"packed: {meta.packed}")
             print(f"double_side: {meta.double_side}")
@@ -189,6 +193,9 @@ def unp_proc_meta(path) -> unp_meta | None:
         scanning_params = root.find(".//Scanning_Parameters")
         scanning_params_attrib = scanning_params.attrib # type: ignore
         meta.bmscan = int(scanning_params_attrib["Number_of_BM_scans"])
+        motor_pos = scanning_params_attrib.get("Motor_Pos")
+        if motor_pos is not None:
+            meta.motor_position = int(motor_pos)
 
         dialog = Unp_Preview_Widget()
         dialog.set_unp_path(Path(path), meta)
@@ -215,6 +222,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"height: {meta.height}")
             print(f"depth: {meta.depth}")
             print(f"bmscan: {meta.bmscan}")
+            print(f"motor position: {meta.motor_position}")
             print(f"vista: {meta.vista}")
             print(f"packed: {meta.packed}")
             print(f"double_side: {meta.double_side}")
@@ -233,6 +241,119 @@ def unp_proc_meta(path) -> unp_meta | None:
 
         else:
             return None
+
+    # case no metadata request path to metadata or cancel file load
+    else:
+        return None
+    
+def unp_batch_proc_meta(path) -> unp_meta | None:
+    """
+    Extract metadata for a .unp file by locating and parsing associated .ini or .xml files.
+    Parameters
+    ----------
+    path : str or os.PathLike
+        Path to the .unp file. The function will look for metadata files with the same base
+        name and either a .ini or .xml extension in the same directory.
+    Returns
+    -------
+    tuple[int | None, int | None, int | None, int | None, int | None, bool | None, bool | None, str | None] | None
+        If metadata is found, returns an 8-tuple:
+            (width, height, depth, bmscan, vista, packed, double_side, pattern)
+        - width, height, depth, bmscan, vista are returned as ints when present.
+        - packed and double_side are returned as bools when present.
+        - pattern is returned as a str when present.
+        Any field not available in the metadata will be None. If no metadata file (.ini or .xml)
+        is present, the function returns None.
+    Behavior
+    --------
+    - Logs progress using show_info().
+    - Looks for a .ini file first. If present, reads values via configparser:
+        * 'OCTViewer': WIDTH -> width, HEIGHT -> height, FRAMES -> depth
+        * 'OCTA': BMScan -> bmscan
+        * 'Scanning': VISTA_Num -> vista, Bidirectional -> double_side, Pattern -> pattern
+        * 'Acquisition': PACKED12 -> packed
+      Values are converted to int or bool as appropriate. If the .ini is successfully read,
+      its parsed values are returned.
+    - If no .ini file is found but an .xml file exists, parses the XML and extracts:
+        * Volume_Size attributes: Height -> height, Width -> width, Number_of_Frames -> depth
+        * Scanning_Parameters attribute: Number_of_BM_scans -> bmscan
+      When only XML is used, vista, packed, double_side and pattern remain None.
+    - If both files exist, the .ini file takes precedence (checked first).
+    - If neither file exists, returns None.
+    Exceptions
+    ----------
+    - configparser.Error (e.g., NoSectionError, NoOptionError) or ValueError may be raised when reading
+      or converting INI values.
+    - xml.etree.ElementTree.ParseError may be raised for malformed XML.
+    - OSError/IOError may be raised for underlying file access issues.
+    Examples
+    --------
+    >>> unp_proc_meta('/path/to/scan.unp')
+    (4096, 800, 840, 2, 1, True, False, 'Raster')
+    >>> unp_proc_meta('/path/to/scan_without_meta.unp')
+    """
+    show_info(f"\nOpening file: {path}")
+
+    head, tail = ospath.split(path)
+    file_no_ext = tail.split(".")[0]
+
+    # constuct path to metafile assumed to be in same directory
+    meta_path_xml = ospath.join(head, file_no_ext + ".xml")
+    show_info(f"Associated .xml meta data file: {meta_path_xml}")
+
+    meta_path_ini = ospath.join(head, file_no_ext + ".ini")
+    show_info(f"Associated .ini meta data file: {meta_path_ini}")
+
+    # Initialize metadata container
+    meta = unp_meta()
+    #width, height, depth = [4096, 800, 840]
+
+
+    # Unp_Preview_Widget()
+
+    if Path(meta_path_ini).is_file():
+        show_info(".ini Meta Data exists:")
+
+        config = configparser.ConfigParser()
+        config.read(meta_path_ini)
+
+        meta.width = config.getint('General', 'WIDTH')
+        meta.height = config.getint('General', 'HEIGHT')
+        meta.depth = config.getint('General', 'FRAMES')
+        meta.bmscan = config.getint('OCTA', 'BMScan')
+        # TODO acquire motor_position from .ini file
+        # meta.motor_position = config.getint('Motor_Control', 'Current') confirm with Yakub
+        meta.vista = config.getint('Scanning', 'VISTA_Num')
+        meta.packed = config.getboolean('Acquisition', 'PACKED12')
+        meta.double_side = config.getboolean('Scanning', 'Bidirectional')
+        meta.pattern = config['Scanning']['Pattern']
+        meta.delay = config.getint('Scanning', 'XDelay')
+
+        if meta.pattern == "Sine_Pause":
+            meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
+            meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
+
+        return meta
+
+    elif Path(meta_path_xml).is_file():
+        show_info(".xml Meta Data exists:")
+
+        tree = ET.parse(meta_path_xml) # TODO here and above add handling for corrupt or empty xml file
+        root = tree.getroot()
+        volume_size = root.find(".//Volume_Size")
+        volume_size_attrib = volume_size.attrib # type: ignore
+        meta.height = int(volume_size_attrib["Height"])
+        meta.width = int(volume_size_attrib["Width"])
+        meta.depth = int(volume_size_attrib["Number_of_Frames"])
+
+        scanning_params = root.find(".//Scanning_Parameters")
+        scanning_params_attrib = scanning_params.attrib # type: ignore
+        meta.bmscan = int(scanning_params_attrib["Number_of_BM_scans"])
+        motor_pos = scanning_params_attrib.get("Motor_Pos")
+        if motor_pos is not None:
+            meta.motor_position = int(motor_pos)
+
+        return meta
 
     # case no metadata request path to metadata or cancel file load
     else:
@@ -302,8 +423,10 @@ def unp_file_reader(path):
                 file_name = tail.split(".")[0]
 
                 output_layers = []
-
-                add_kwargs = {"name": file_name+ "_raw"}
+                if meta.motor_position is not None:
+                    add_kwargs = {"name": file_name+ "_raw", "metadata": {"motor_position" :meta.motor_position}}
+                else:
+                    add_kwargs = {"name": file_name+ "_raw"}
                 layer_type = "image"
                 bscan_layer = Layer.create(display, add_kwargs, layer_type)
                 vmin, vmax = np.percentile(display, (1, 99))
@@ -312,7 +435,10 @@ def unp_file_reader(path):
 
                 if meta.structure:
                     #generate the strucutral and structural enface
-                    add_kwargs_structural = {"name": file_name + f"_structural"}
+                    if meta.motor_position is not None:
+                        add_kwargs_structural = {"name": file_name + "_structural", "metadata": {"motor_position" :meta.motor_position}}
+                    else:
+                        add_kwargs_structural = {"name": file_name + "_structural"}
                     display_structural = average_bscans_torch(display, scans_per_avg=meta.bmscan)
                     structural_layer = Layer.create(display_structural, add_kwargs_structural, layer_type)
                     vmin, vmax = np.percentile(display_structural, (1, 99))
@@ -332,7 +458,10 @@ def unp_file_reader(path):
 
 
                 #generate OCTA and OCTA enface
-                add_kwargs_octa = {"name": file_name + f"_OCTA_{meta.octa}"}
+                if meta.motor_position is not None:
+                    add_kwargs_octa = {"name": file_name + f"_OCTA_{meta.octa}", "metadata": {"motor_position" :meta.motor_position}}
+                else:
+                    add_kwargs_octa = {"name": file_name + f"_OCTA_{meta.octa}"}
                 display_octa = generate_octa(
                     display,
                     mscans=meta.bmscan,
@@ -359,8 +488,10 @@ def unp_file_reader(path):
             else:
                 _, tail = ospath.split(path)
                 file_name = tail.split(".")[0]
-
-                add_kwargs = {"name": file_name}
+                if meta.motor_position is not None:
+                    add_kwargs = {"name": file_name, "metadata": {"motor_position" :meta.motor_position}}
+                else:
+                    add_kwargs = {"name": file_name}
                 layer_type = "image"
                 bscan_layer = Layer.create(display, add_kwargs, layer_type)
                 vmin, vmax = np.percentile(display, (1, 99))
@@ -387,7 +518,10 @@ def unp_file_reader(path):
             _, tail = ospath.split(path)
             file_name = tail.split(".")[0]
 
-            add_kwargs = {"name": file_name}
+            if meta.motor_position is not None:
+                add_kwargs = {"name": file_name, "metadata": {"motor_position" :meta.motor_position}}
+            else:
+                add_kwargs = {"name": file_name}
             layer_type = "image"
             bscan_layer = Layer.create(display, add_kwargs, layer_type)
             vmin, vmax = np.percentile(display, (1, 99))

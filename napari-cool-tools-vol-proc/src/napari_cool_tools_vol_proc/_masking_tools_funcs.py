@@ -5,6 +5,8 @@ from typing import List, Tuple
 import numpy as np
 from napari.types import ImageData, LabelsData
 
+from napari_cool_tools_io import device, torch
+
 
 def circle_circumference_mask(center_x, center_y, radius, image_size):
     """
@@ -267,9 +269,9 @@ def isolate_labeled_volume(
 
     return out_data
 
-
+@torch.inference_mode()
 def project_2d_mask(
-    img_data: ImageData, lbl_data: LabelsData, axis: int = 1, swap_axes: bool = False
+    img_data: np.ndarray|torch.Tensor, lbl_data: np.ndarray|torch.Tensor, axis: int = 1, swap_axes: bool = False, use_accelerator:bool=False, return_numpy:bool=True
 ) -> LabelsData:
     """ """
 
@@ -282,15 +284,62 @@ def project_2d_mask(
         f"Mask dimensions {lbl_data.shape} do not match Image dimensions {(img_data.shape[-3], img_data.shape[-1])}\n"
     )
 
+    # set device
+    if use_accelerator:
+        current_device = device
+    else:
+        current_device = "cpu"
+    
+    # convert to tensor if necessary
+    if isinstance(lbl_data,torch.Tensor):
+        if lbl_data.device.type != device.type:
+            lbl_data = lbl_data.to(current_device)
+    else:
+        lbl_data = torch.as_tensor(lbl_data,device=current_device)
+
     if axis == 1:
-        lbl_data = lbl_data[:, np.newaxis, :]
+        lbl_data = lbl_data[:, None, :]
         if swap_axes:
-            lbl_data = lbl_data.transpose(2, 1, 0)
+            lbl_data = lbl_data.permute(2, 1, 0)
     elif axis == 0:
         pass
     elif axis == 2:
         pass
 
-    out_lbl = np.repeat(lbl_data, img_data.shape[1], axis=axis)
+    lbl_data = torch.repeat_interleave(lbl_data, img_data.shape[axis], dim=axis)
+    #out_lbl = np.repeat(lbl_data, img_data.shape[axis], axis=axis)
+    if use_accelerator:
+        lbl_data = lbl_data.cpu()
+        torch.cuda.empty_cache()
 
-    return out_lbl
+    if not return_numpy:
+        return lbl_data
+    else:
+        return lbl_data.numpy()
+
+# def project_2d_mask(
+#     img_data: ImageData, lbl_data: LabelsData, axis: int = 1, swap_axes: bool = False
+# ) -> LabelsData:
+#     """ """
+
+#     assert (
+#         lbl_data.ndim == 2
+#         and img_data.ndim == 3
+#         and lbl_data.shape[-2] == img_data.shape[-3]
+#         and lbl_data.shape[-1] == img_data.shape[-1]
+#     ), (
+#         f"Mask dimensions {lbl_data.shape} do not match Image dimensions {(img_data.shape[-3], img_data.shape[-1])}\n"
+#     )
+
+#     if axis == 1:
+#         lbl_data = lbl_data[:, np.newaxis, :]
+#         if swap_axes:
+#             lbl_data = lbl_data.transpose(2, 1, 0)
+#     elif axis == 0:
+#         pass
+#     elif axis == 2:
+#         pass
+
+#     out_lbl = np.repeat(lbl_data, img_data.shape[1], axis=axis)
+
+#     return out_lbl

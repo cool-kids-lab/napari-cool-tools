@@ -16,6 +16,7 @@ class unp_meta:
     height: int = 0
     depth: int = 0
     bmscan: int = 0
+    motor_position: int|None = None
     vista: int = 0
     packed: bool = False
     double_side: bool = False
@@ -28,6 +29,7 @@ class unp_meta:
     delay: int = 0
     sine_frame_indices: list[int] = None
     sine_hires_ratio: int = 0
+    coefRange: int = 100
     c2: int = 0
     c3: int = 0
     octa: str = "none"

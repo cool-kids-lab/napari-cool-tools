@@ -1,3 +1,4 @@
+from typing import Literal
 from napari_cool_tools_oct_preproc._oct_preproc_func import auto_contrast, desine, generate_octa
 import torch
 from napari_cool_tools_io import viewer, device
@@ -26,22 +27,25 @@ def auto_contrast_plugin(
 
 def unwarp_sine_plugin(
     img: Image,
+    mode: Literal["bilinear","nearest","bicubic"] = "bilinear",
+    align_corners: bool = False,
     transpose: bool = False,
     interpolation_fac: int = 2,
 ):
-    unwarp_sine_thread(img, transpose=transpose, interpolation_fac=interpolation_fac) # type: ignore
+    unwarp_sine_thread(img, mode= mode, align_corners= align_corners, transpose=transpose, interpolation_fac=interpolation_fac) # type: ignore
 
     return
 
 @thread_worker(connect={"yielded": viewer.add_layer})
-def unwarp_sine_thread(img: Image, transpose: bool = False, interpolation_fac: int = 2):
+def unwarp_sine_thread(img: Image, mode: Literal["bilinear","nearest","bicubic"] = "bilinear", align_corners: bool = False, transpose: bool = False, interpolation_fac: int = 2):
     """"""
 
     show_info("Starting sine unwarping...")
 
     add_kwargs = {"name": f"{img.name}_unwarped"}
     input_data = torch.Tensor(img.data).to(device)
-    output_data = desine(input_data, mode="bilinear", transpose=transpose, scale_fac=interpolation_fac)
+    output_data = desine(input_data, mode=mode, align_corners=align_corners,transpose=transpose, scale_fac=interpolation_fac)
+    # output_data = desine(input_data, mode="bilinear", transpose=transpose, scale_fac=interpolation_fac)
     output_data_cpu = output_data.cpu().numpy()
     layer = Layer.create(output_data_cpu, add_kwargs, "image")
 
