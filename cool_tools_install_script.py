@@ -1,3 +1,5 @@
+import argparse
+from pathlib import Path
 import subprocess
 import sys
 from typing import List, Literal
@@ -6,7 +8,7 @@ import tomlkit
 from magicgui import magicgui
 import os
 
-def main() -> bool:
+def main(pixi_binary_path:Path) -> bool:
     """Launches GUI to configure and install Napari with Pixi.
 
     Returns:
@@ -15,6 +17,7 @@ def main() -> bool:
 
     @magicgui(call_button="Install")
     def napari_install(
+        version: Literal["development", "production"] = "production",
         backend: Literal["cpu", "cuda12"] = "cpu"
     ):
         """Installs Napari with selected configuration.
@@ -26,7 +29,9 @@ def main() -> bool:
         """
         try:
             features: List[str] = [backend]
-
+            dev_status = ""
+            if version == "development":
+                features.append(version)
             # Load pixi.toml
             with open("pixi.toml", "r", encoding="utf-8") as file:
                 print("File Opened")
@@ -41,8 +46,9 @@ def main() -> bool:
                 tomlkit.dump(pixi_config, file)
 
             # Run pixi install
-            pixi_path = os.path.expanduser(r"~\.pixi\bin\pixi.exe")  # Typical path on Windows
-            subprocess.check_call([pixi_path, "install"])
+            #pixi_path = os.path.expanduser(r"~\.pixi\bin\pixi.exe")  # Typical path on Windows
+            #subprocess.check_call([pixi_path, "install"])
+            subprocess.check_call([pixi_binary_path, "install"])
 
             print("Installation completed successfully.")
             sys.exit(0)
@@ -57,5 +63,10 @@ def main() -> bool:
 
 
 if __name__ == "__main__":
-    success = main()
+    parser = argparse.ArgumentParser(description="A script to setup the pixi environment")
+    parser.add_argument("--pixi_binary_path",required=True, help="Path to the pixi binary")
+    args = parser.parse_args()
+    print(f"args:{args}")
+    success = main(args.pixi_binary_path)
     sys.exit(0 if success else 1)
+
