@@ -120,7 +120,7 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.linearInterpCheckBox.stateChanged.connect(self.updateImage)
         self.cropCheckBox.stateChanged.connect(self.updateImage)
         self.inverseCheckBox.stateChanged.connect(self.updateImage)
-
+        
         self.frameNumSpinBox.valueChanged.connect(self.updateImage)
         self.averageSpinBox.valueChanged.connect(self.updateImage)
 
@@ -137,6 +137,7 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.C2SpinBox.valueChanged.connect(self.updateImage)
         self.C3SpinBox.valueChanged.connect(self.updateImage)
         self.autoFindPushButton.clicked.connect(self.autoFindCoeffs)
+        self.splitModeComboBox.currentIndexChanged.connect(self.updateImage)
 
         self.updateImage()
 
@@ -164,12 +165,22 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
                 bscan = bscan[::-1,:]
 
             AA, BB = (0, 1)
+            split = 2
 
             if self.flipABCheckBox.isChecked():
                 if current_idx % 2:
                     AA, BB = (1, 0)
 
+            if self.splitModeComboBox.currentIndex() == 1:
+                AA, BB = 2*AA, 2*BB
+                split = 4
+
             new_image_torch = torch.from_numpy(bscan.copy()).to(device=device)
+
+            #TODO handle double side images
+            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
+            if (cframe % 2):
+                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             if self.linearInterpCheckBox.isChecked():
                 mode = "bilinear"
@@ -184,22 +195,42 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
                 coeffs = torch.as_tensor(coeffs, dtype=torch.float64, device=device)
                 scales = torch.as_tensor(scales, dtype=torch.float64, device=device)
 
-                new_image_1 = new_image_torch[:,AA::2]
+                new_image_1 = new_image_torch[:,AA::split]
                 new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_torch[:,AA::2] = new_image_1
+                new_image_torch[:,AA::split] = new_image_1
+
+                if self.splitModeComboBox.currentIndex() == 1:
+                    new_image_1 = new_image_torch[:,AA+1::split]
+                    new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_torch[:,AA+1::split] = new_image_1
 
                 if self.dualEdgeCheckBox.isChecked():
-                    new_image_2 = new_image_torch[:,BB::2]
-                    coeffs = -1.0*coeffs
-                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, coeffs, scales, mode=mode)
-                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, coeffs, scales,mode=mode)
-                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, coeffs,scales, mode=mode)
-                    new_image_torch[:,BB::2] = new_image_2
+                    new_image_2 = new_image_torch[:,BB::split]
+                    # coeffs = -1.0*coeffs
+                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    new_image_torch[:,BB::split] = new_image_2
+
+                    if self.splitModeComboBox.currentIndex() == 1:
+                        new_image_2 = new_image_torch[:,BB+1::split]
+                        # coeffs = -1.0*coeffs
+                        new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                        new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                        new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                        new_image_torch[:,BB+1::split] = new_image_2
 
             if self.desineCheckBox.isChecked():
                 new_image_torch = desine(new_image_torch, transpose=False, scale_fac=1)
+
+            #TODO handle double side images
+            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
+            if (cframe % 2):
+                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             new_image = new_image_torch.cpu().numpy()
 
@@ -218,7 +249,6 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         else:
             self.viewer.setImage(new_image, autoRange=False, autoLevels = False, levels=[self.minSpinBox.value(),self.maxSpinBox.value()], axes=self.axes)
 
-
     def get_output_volume(self):
         if self.volume is None:
             return
@@ -230,6 +260,13 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         else:
             mode = "nearest"
 
+        coeffs = [self.C0SpinBox.value(), self.C1SpinBox.value(), self.C2SpinBox.value(), self.C3SpinBox.value()]
+        scales = [float(self.C0ScaleComboBox.currentText()), float(self.C1ScaleComboBox.currentText()),
+                float(self.C2ScaleComboBox.currentText()), float(self.C3ScaleComboBox.currentText())]
+        
+        coeffs = torch.as_tensor(coeffs, dtype=torch.float64, device=device)
+        scales = torch.as_tensor(scales, dtype=torch.float64, device=device)
+
         for current_idx,bscan in enumerate(self.volume):
 
             if self.inverseCheckBox.isChecked():
@@ -237,37 +274,62 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
 
             # Default
             AA, BB = (0, 1)
+            split = 2
 
             if self.flipABCheckBox.isChecked():
                 if current_idx % 2: #TODO handle bmscan
                     AA, BB = (1, 0)
 
+            if self.splitModeComboBox.currentIndex() == 1:
+                AA, BB = 2*AA, 2*BB
+                split = 4
+
+
             new_image_torch = torch.from_numpy(bscan.copy()).to(device=device)
 
-            if self.enableCheckBox.isChecked():
-                coeffs = [self.C0SpinBox.value(), self.C1SpinBox.value(), self.C2SpinBox.value(), self.C3SpinBox.value()]
-                scales = [float(self.C0ScaleComboBox.currentText()), float(self.C1ScaleComboBox.currentText()),
-                        float(self.C2ScaleComboBox.currentText()), float(self.C3ScaleComboBox.currentText())]
-                
-                coeffs = torch.as_tensor(coeffs, dtype=torch.float64, device=device)
-                scales = torch.as_tensor(scales, dtype=torch.float64, device=device)
+            #TODO handle double side images
+            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
+            if (cframe % 2):
+                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
-                new_image_1 = new_image_torch[:,AA::2]
+            if self.enableCheckBox.isChecked():
+
+                new_image_1 = new_image_torch[:,AA::split]
                 new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_torch[:,AA::2] = new_image_1
+                new_image_torch[:,AA::split] = new_image_1
+
+                if self.splitModeComboBox.currentIndex() == 1:
+                    new_image_1 = new_image_torch[:,AA+1::split]
+                    new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                    new_image_torch[:,AA+1::split] = new_image_1
 
                 if self.dualEdgeCheckBox.isChecked():
-                    new_image_2 = new_image_torch[:,BB::2]
-                    coeffs = -1.0*coeffs
-                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, coeffs, scales, mode=mode)
-                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, coeffs, scales,mode=mode)
-                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, coeffs,scales, mode=mode)
-                    new_image_torch[:,BB::2] = new_image_2
+                    new_image_2 = new_image_torch[:,BB::split]
+                    # coeffs = -1.0*coeffs
+                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    new_image_torch[:,BB::split] = new_image_2
+
+                    if self.splitModeComboBox.currentIndex() == 1:
+                        new_image_2 = new_image_torch[:,BB+1::split]
+                        # coeffs = -1.0*coeffs
+                        new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                        new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                        new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                        new_image_torch[:,BB+1::split] = new_image_2
 
             if self.desineCheckBox.isChecked():
                 new_image_torch = desine(new_image_torch,transpose=False)
+
+            #TODO handle double side images
+            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
+            if (cframe % 2):
+                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             new_image = new_image_torch.cpu().numpy()
 

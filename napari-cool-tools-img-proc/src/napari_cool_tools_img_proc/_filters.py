@@ -209,6 +209,82 @@ def sharpen_um_pt_func(
         return layer
 
 
+def filter_mean(img: Image, kernel_size: int = 3):
+    """Implementation of mean filter function
+    Args:
+        img (Image): Image/Volume to be segmented.
+        kernel_size (int): Dimension of symmetrical kernel for Kornia implementation kernel should be odd number
+
+    Returns:
+        Image Layer that has mean blur  with '_Mean_(kernel_size)' suffix added to name.
+    """
+    filter_mean_thread(img=img, kernel_size=kernel_size)
+    return
+
+@thread_worker(connect={"returned": viewer.add_layer}, progress=True)
+def filter_mean_thread(img: Image, kernel_size: int = 3) -> Image:
+    """Implementation of mean filter function
+    Args:
+        img (Image): Image/Volume to be segmented.
+        kernel_size (int): Dimension of symmetrical kernel for Kornia implementation kernel should be odd number
+
+    Returns:
+        Image Layer that has mean blur  with '_Mean_(kernel_size)' suffix added to name.
+    """
+    show_info("Mean Filter thread has started")
+    output = filter_mean_pt_func(img=img, kernel_size=kernel_size)
+    torch.cuda.empty_cache()
+    memory_stats()
+    show_info("Mean Filter thread has completed")
+    return output
+
+def filter_mean_pt_func(img: Image, kernel_size: int = 3) -> Image:
+    """Implementation of mean filter function
+    Args:
+        img (Image): Image/Volume to be segmented.
+        kernel_size (int): Dimension of symmetrical kernel for Kornia implementation kernel should be odd number
+
+    Returns:
+        Image Layer that has mean blur  with '_Mean_(kernel_size)' suffix added to name.
+    """
+    from kornia.filters import box_blur
+
+    name = img.name
+
+    # optional kwargs for viewer.add_* method
+    add_kwargs = {"name": f"{name}_Mean_{kernel_size}"}
+
+    # optional layer type argument
+    layer_type = "image"
+
+    data = img.data.copy()
+
+    try:
+        assert data.ndim == 2 or data.ndim == 3, (
+            "Only works for data of 2 or 3 dimensions"
+        )
+    except AssertionError as e:
+        print("An error Occured:", str(e))
+    else:
+        pt_data = torch.tensor(data, device=device)
+
+        if data.ndim == 2:
+            in_data = pt_data.unsqueeze(0).unsqueeze(0)
+            um_data = box_blur(in_data, (kernel_size, kernel_size)).squeeze()
+            out_data = um_data.detach().cpu().numpy()
+            layer = Layer.create(out_data, add_kwargs, layer_type)
+        elif data.ndim == 3:
+            for i in tqdm(range(len(pt_data)), desc="Mean Filter"):
+                in_data = pt_data[i].unsqueeze(0).unsqueeze(0)
+                pt_data[i] = box_blur(in_data, (kernel_size, kernel_size)).squeeze()
+
+            out_data = pt_data.detach().cpu().numpy()
+            layer = Layer.create(out_data, add_kwargs, layer_type)
+
+        return layer
+
+
+
 def filter_median(img: Image, kernel_size: int = 3):
     """Implementation of median filter function
     Args:

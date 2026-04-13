@@ -44,6 +44,9 @@ contributions:
     - id: napari-cool-tools-img-proc.unsharp
       title: Sharpen (Unsharp Mask)
       python_name: napari_cool_tools_img_proc._filters:sharpen_um
+    - id: napari-cool-tools-img-proc.mean
+      title: Mean Blur
+      python_name: napari_cool_tools_img_proc._filters:filter_mean
     - id: napari-cool-tools-img-proc.median
       title: Median Blur
       python_name: napari_cool_tools_img_proc._filters:filter_median
@@ -122,6 +125,9 @@ contributions:
       autogenerate: true
     - command: napari-cool-tools-img-proc.unsharp
       display_name: Sharpen (UM)
+      autogenerate: true
+    - command: napari-cool-tools-img-proc.mean
+      display_name: Mean Blur
       autogenerate: true
     - command: napari-cool-tools-img-proc.median
       display_name: Median Blur

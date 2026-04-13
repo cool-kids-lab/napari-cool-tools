@@ -4,7 +4,7 @@ from napari_cool_tools_oct_preproc._oct_preproc_func import desine
 import numpy as np
 from tqdm import tqdm
 import torch
-from napari_cool_tools_io import unp_meta
+from napari_cool_tools_io import getWindow, unp_meta
 import torch.nn.functional as F
 from napari.utils.notifications import show_info
 from napari_cool_tools_io import device
@@ -167,10 +167,10 @@ def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
         raise ValueError("Number of A-scans must be even for double-sweep subtraction")
 
     # Split into even (forward) and odd (reverse) A-scans
-    corrected_1 = data[0::2, :]                   # every even A-scan
-    corrected_2 = torch.flip(data[1::2, :], [1]) # every odd A-scan, reversed along spectral axis
-    # corrected_2 = data[1::2, :] # every odd A-scan, reversed along spectral axis
-    
+    corrected_1 = data[0::2, :] # every even A-scan
+    # corrected_2 = data[1::2, :] # every odd A-scan
+    corrected_2 = torch.flip(data[1::2, :], dims=[1]) # flip the odd A-scans to align with the even ones
+
     # Remove DC component by subtracting the median spectrum
     # Subtract median (DC removal) along each spectrum (per column)
     corrected_1 = corrected_1 - torch.mean(corrected_1, dim=0, keepdim=True)
@@ -184,7 +184,7 @@ def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
     return subtracted_signal
 
 
-def set_dispersion_coefficients_torch(data: torch.Tensor, maxDispOrders, coefRange) -> torch.Tensor:
+def set_dispersion_coefficients_torch(data: torch.Tensor, maxDispOrders, coefRange, dispersion_mode: int = 0) -> list:
     """
     Determine per-order dispersion coefficients by evaluating a cost function over an integer range.
     This function searches, for each dispersion order (from 1 to maxDispOrders-1), an integer coefficient
@@ -237,7 +237,7 @@ def set_dispersion_coefficients_torch(data: torch.Tensor, maxDispOrders, coefRan
     # coeffs = set_dispersion_coefficients_torch(data_tensor, maxDispOrders=5, coefRange=3)
     """
     """"""
-    arrCountDispCoeff = torch.zeros((maxDispOrders - 1, 1),device=data.device, dtype=data.dtype)
+    arrCountDispCoeff = [0,0]
 
     for idx_CounterDispCoef in tqdm(
         range(0, len(arrCountDispCoeff)), desc="Calculating Displacement Coefficients"
@@ -247,7 +247,7 @@ def set_dispersion_coefficients_torch(data: torch.Tensor, maxDispOrders, coefRan
 
         for k in tqdm(range(0, len(arrDispCoeffRange)), desc="Calculating Costs"):
             arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[k]
-            arrCost[k] = cal_cost_function_torch(data, maxDispOrders, arrCountDispCoeff)
+            arrCost[k] = cal_cost_function_torch(data, maxDispOrders, arrCountDispCoeff, dispersion_mode=dispersion_mode)
 
         argMinCost = arrCost.argmax()
         arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[argMinCost]
@@ -255,7 +255,7 @@ def set_dispersion_coefficients_torch(data: torch.Tensor, maxDispOrders, coefRan
     return arrCountDispCoeff
 
 
-def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff: torch.Tensor) -> torch.Tensor:
+def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff: list, dispersion_mode: int = 0) -> torch.Tensor:
     """
     Compute an entropy-based cost for OCT data after dispersion phase compensation.
     This function:
@@ -271,8 +271,8 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
         last dimension (L). Typically complex-valued after dispersion compensation.
     maxDispOrders
         Dispersion model order(s) forwarded to `comp_dis_phase_torch`.
-    arrCountDispCoeff : torch.Tensor
-        Dispersion coefficient tensor consumed by `comp_dis_phase_torch`.
+    arrCountDispCoeff : list
+        1D list of length >= max(0, maxDispOrders - 1) containing real-valued dispersion coefficients.
     Returns
     -------
     torch.Tensor
@@ -290,13 +290,13 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
       assuming `comp_dis_phase_torch` is differentiable.
     """
     """"""
-    data_disp_comp = comp_dis_phase_torch(data, maxDispOrders, arrCountDispCoeff)
+    data_disp_comp = comp_dis_phase_torch(data, maxDispOrders, arrCountDispCoeff, mode=dispersion_mode)
 
     # FFT magnitude squared
     toct = torch.abs(torch.fft.ifft(data_disp_comp, dim=-1)) ** 2
     
     # Avoid edges
-    # roi_oct = toct[:, 49 : int(data_disp_comp.shape[1] / 2) - 50]#this is the positive half
+    # roi_oct = toct[:, 50 : int(data_disp_comp.shape[1] / 2) - 50]#this is the positive half
     roi_oct = toct[50:-50, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
     
     # Normalize
@@ -310,7 +310,7 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
     cost = torch.sum(entropy)
     return cost
 
-def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff: torch.Tensor) -> torch.Tensor:
+def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff: list, mode: int = 3) -> torch.Tensor:
     """
     Dispersion-phase compensation for complex OCT data using PyTorch.
     This function decomposes a complex-valued signal into amplitude and phase, adds a
@@ -325,11 +325,12 @@ def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff:
         (e.g., torch.complex64 or torch.complex128). The device and dtype drive internal computations.
     max_disp_orders : int
         Maximum polynomial order of the dispersion phase to apply. If <= 1, no dispersion phase is added.
-    arrCountDispCoeff : torch.Tensor
-        1D tensor of length >= max(0, max_disp_orders - 1) containing real-valued dispersion coefficients
+    arrCountDispCoeff : list
+        1D list of length >= max(0, max_disp_orders - 1) containing real-valued dispersion coefficients
         [c2, c3, ..., c_{max_disp_orders}]. Should reside on the same device as `data` and use a real dtype
         compatible with `data`'s real component.
-    Returns
+    mode : int, optional
+        Mode of dispersion compensation. 0 = global, 1 = quadratic, 2=sinusoidal, 3=quadratic + sinusoidal.
     -------
     torch.Tensor
         Complex-valued tensor of the same shape and dtype as `data`, with dispersion compensation applied.
@@ -356,18 +357,128 @@ def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff:
     line_per_frame, scan_pts = data.shape
 
     # k-axis (broadcasted across lines)
-    k_linear = torch.linspace(-1.0, 1.0, scan_pts, device=data.device, dtype=data.dtype)
-    k_axis   = k_linear.unsqueeze(0).expand(line_per_frame, -1) - 1.0
+    k_linear = torch.linspace(-1.0, 1.0, scan_pts, device=data.device, dtype=phase.dtype).unsqueeze(0) - 1.0
+    k_axis   = k_linear.expand(line_per_frame, -1)
 
-    # Apply dispersion phase terms: i from 0..max_disp_orders-2 -> power i+2
-    # (matches your NumPy loop)
-    n_terms = max(0, max_disp_orders - 1)
-    for i in range(n_terms):
-        phase = phase + arrCountDispCoeff[i] * k_axis.pow(i + 2)
+    if mode == 0:
+        for i in range(2):
+            phase = phase + arrCountDispCoeff[i] * k_axis.pow(i + 2)
+
+    if mode == 1:
+        h = line_per_frame
+        a = arrCountDispCoeff[0]
+        b = a + arrCountDispCoeff[1]
+
+        # === Coefficients for y = A x^2 + B x + C ===
+        A = 4.0 * (a - b) / (h ** 2)
+        B = -4.0 * (a - b) / h
+        C = a
+
+        # Define f(x) analogous to MATLAB's function handle, using PyTorch ops
+        f = lambda x: A * x**2 + B * x + C
+
+        x = torch.linspace(0, h, h, device=data.device, dtype=phase.dtype).unsqueeze(-1)
+        coeff= f(x)
+        coeff = coeff.expand(-1, scan_pts)
+
+        phase = phase + coeff * k_axis.pow(2)
+
+    if mode == 2:
+        h = line_per_frame
+        a = arrCountDispCoeff[0]
+        b = arrCountDispCoeff[1]
+
+        x = torch.linspace(0, h, h, device=data.device, dtype=phase.dtype).unsqueeze(-1)
+        x_norm = (x/h)*2*torch.pi
+        coeff = b*0.5*(torch.sin(x_norm - torch.pi/2) + 1) + a
+        coeff = coeff.expand(-1, scan_pts)
+
+        phase = phase + coeff * k_axis.pow(2)
+
+    
+    if mode == 3:
+        h = line_per_frame
+        a = arrCountDispCoeff[0]
+        b = a + arrCountDispCoeff[1]
+
+        # === Coefficients for y = A x^2 + B x + C ===
+        A = 4.0 * (a - b) / (h ** 2)
+        B = -4.0 * (a - b) / h
+        C = a
+
+        # Define f(x) analogous to MATLAB's function handle, using PyTorch ops
+        f = lambda x: A * x**2 + B * x + C
+
+        x = torch.linspace(0, h, h, device=data.device, dtype=phase.dtype).unsqueeze(-1)
+        x_org = (h/2) * torch.sin(torch.pi/h * x - torch.pi/2) + (h/2)
+
+        coeff = f(x_org)
+        coeff = coeff.expand(-1, scan_pts)
+
+        phase = phase + coeff * k_axis.pow(2)
 
     # Recombine amplitude and phase: amp * exp(1j*phase)
     data_disp_comp = amp * torch.exp(1j*phase)
     return data_disp_comp
+
+# def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff: torch.Tensor) -> torch.Tensor:
+#     """
+#     Dispersion-phase compensation for complex OCT data using PyTorch.
+#     This function decomposes a complex-valued signal into amplitude and phase, adds a
+#     polynomial dispersion phase term across a normalized k-axis, and recombines the
+#     amplitude with the corrected phase. The dispersion phase is modeled as:
+#         phase += sum_{i=0}^{n_terms-1} coeff[i] * k^(i+2)
+#     i.e., powers k^2, k^3, ..., k^{max_disp_orders}, where n_terms = max(0, max_disp_orders - 1).
+#     Parameters
+#     ----------
+#     data : torch.Tensor
+#         Complex-valued tensor of shape (line_per_frame, scan_pts). Must be a complex dtype
+#         (e.g., torch.complex64 or torch.complex128). The device and dtype drive internal computations.
+#     max_disp_orders : int
+#         Maximum polynomial order of the dispersion phase to apply. If <= 1, no dispersion phase is added.
+#     arrCountDispCoeff : torch.Tensor
+#         1D tensor of length >= max(0, max_disp_orders - 1) containing real-valued dispersion coefficients
+#         [c2, c3, ..., c_{max_disp_orders}]. Should reside on the same device as `data` and use a real dtype
+#         compatible with `data`'s real component.
+#     Returns
+#     -------
+#     torch.Tensor
+#         Complex-valued tensor of the same shape and dtype as `data`, with dispersion compensation applied.
+#     Notes
+#     -----
+#     - The k-axis is constructed as a linearly spaced vector in [-1, 1] of length `scan_pts`,
+#       broadcast across lines, and then shifted by -1.0, resulting in values in [-2, 0].
+#     - Computational complexity is O(line_per_frame * scan_pts * n_terms).
+#     - No in-place modifications are made to the input.
+#     Examples
+#     --------
+#     >>> import torch
+#     >>> data = torch.ones(2, 4, dtype=torch.complex64)
+#     >>> coeffs = torch.tensor([0.1, -0.01], dtype=data.real.dtype, device=data.device)
+#     >>> out = comp_dis_phase_torch(data, max_disp_orders=3, arrCountDispCoeff=coeffs)
+#     >>> out.shape
+#     torch.Size([2, 4])
+#     """
+
+#     # Amplitude/phase
+#     amp   = torch.abs(data)
+#     phase = torch.angle(data)
+
+#     line_per_frame, scan_pts = data.shape
+
+#     # k-axis (broadcasted across lines)
+#     k_linear = torch.linspace(-1.0, 1.0, scan_pts, device=data.device, dtype=data.dtype)
+#     k_axis   = k_linear.unsqueeze(0).expand(line_per_frame, -1) - 1.0
+
+#     # Apply dispersion phase terms: i from 0..max_disp_orders-2 -> power i+2
+#     # (matches your NumPy loop)
+#     n_terms = max(0, max_disp_orders - 1)
+#     for i in range(n_terms):
+#         phase = phase + arrCountDispCoeff[i] * k_axis.pow(i + 2)
+
+#     # Recombine amplitude and phase: amp * exp(1j*phase)
+#     data_disp_comp = amp * torch.exp(1j*phase)
+#     return data_disp_comp
 
 def unpack12_torch(buf: torch.Tensor) -> torch.Tensor:
     assert buf.dtype == torch.uint8, "Input must be torch.uint8"
@@ -395,28 +506,33 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
         data_size_bytes = 2 * meta.width * meta.height
 
     if meta.full_range:
-        oct_vol_array = torch.zeros((meta.depth, meta.height, meta.width), dtype=torch.float32).to(device)
+        if meta.split_spectrum:
+            oct_vol_array = torch.zeros((meta.depth, meta.height*2, meta.width//2), dtype=torch.float32).to(device)
+        else:
+            oct_vol_array = torch.zeros((meta.depth, meta.height, meta.width), dtype=torch.float32).to(device)
     else:
-        oct_vol_array = torch.zeros((meta.depth, meta.height, int(meta.width/2)), dtype=torch.float32).to(device)
+        if meta.split_spectrum:
+            oct_vol_array = torch.zeros((meta.depth, meta.height*2, meta.width//4), dtype=torch.float32).to(device)
+        else:
+            oct_vol_array = torch.zeros((meta.depth, meta.height, meta.width//2), dtype=torch.float32).to(device)
 
     # open file
     with open(unp_file_path, "rb", buffering=0) as byte_reader:
         
         # 1D Hamming window (like np.hamming)
-        hamming = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
+        hamming = getWindow(meta.width, meta.windowType, dtype=torch.float32, device=device)
         hamming = hamming.unsqueeze(0).repeat(meta.height, 1)
-        # hamming_signal = subtracted_signal * hamming
-
         dispMaxOrder = 3
 
-        # auto dispersion
+        # auto dispersion (does not support split dispersion yet, only calculates c2 and c3 for the whole volume, global mode)
+        #this is for experimental only
         if auto_dispersion:
             # move to center frame in binary file
             byte_reader.seek(int(data_size_bytes) * int(meta.depth/2), 0)
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
-                if raw_data.size <= meta.height * meta.width:
+                if raw_data.size != data_size_bytes:
                     pass
 
                 else:
@@ -433,21 +549,21 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
                     # Hamming windowing
                     hamming_signal = subtracted_signal * hamming
 
-                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
-                    c2,c3 = dispersion_coeffs.cpu().numpy()
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100, dispersion_mode=meta.dispersion_mode)
+                    c2,c3 = dispersion_coeffs
                     
                     if flip_coeffs:
                         if c2 < 0:
                             c2 = c2 * -1
                             c3 = c3 * -1
                             
-                    meta.c2 = int(c2)
-                    meta.c3 = int(c3)
+                    meta.c2A = int(c2)
+                    meta.c3A = int(c3)
 
 
             else:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
-                if raw_data.size <= meta.height * meta.width:
+                if raw_data.size != meta.height * meta.width:
                     pass
 
                 else:
@@ -463,19 +579,16 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
                     # Hamming windowing
                     hamming_signal = subtracted_signal * hamming
 
-                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100)
-                    c2,c3 = dispersion_coeffs.cpu().numpy()
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100, dispersion_mode=meta.dispersion_mode)
+                    c2,c3 = dispersion_coeffs
                     
                     if flip_coeffs:
                         if c2 < 0:
                             c2 = c2 * -1
                             c3 = c3 * -1
 
-                    meta.c2 = int(c2)
-                    meta.c3 = int(c3)
-
-
-        dispCoeffs = torch.tensor([meta.c2, meta.c3], device=device) #disable dispersion compensation
+                    meta.c2A = int(c2)
+                    meta.c3A = int(c3)
 
         byte_reader.seek(0, 0)
         
@@ -484,14 +597,14 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
-                if raw_data.size < meta.height * meta.width:
+                if raw_data.size != data_size_bytes:
                     continue
                 raw_data = torch.tensor(raw_data).to(device)
                 raw = unpack12_torch(raw_data)
                 raw = raw.reshape((meta.height, meta.width))
             else:
                 raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
-                if raw_data.size < meta.height * meta.width:
+                if raw_data.size != meta.height * meta.width:
                     continue
                 raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
                 raw = torch.tensor(raw).to(device)
@@ -505,12 +618,34 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
             # Hamming windowing
             hamming_signal = subtracted_signal * hamming
 
-            # print(dispCoeffs)
-            
-            img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffs)
+            img_disp_comp = torch.zeros_like(hamming_signal, dtype=torch.complex64, device=device)
+
+            if meta.split_dispersion:
+                dispCoeffsA = [meta.c2A, meta.c3A] #disable dispersion compensation
+                dispCoeffsB = [meta.c2B, meta.c3B] #disable dispersion compensation
+                img_disp_comp[0::2] = comp_dis_phase_torch(hamming_signal[0::2], dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
+                img_disp_comp[1::2] = comp_dis_phase_torch(hamming_signal[1::2], dispMaxOrder, dispCoeffsB, mode=meta.dispersion_mode)
+
+            else:
+                dispCoeffsA = [meta.c2A, meta.c3A] #disable dispersion compensation
+                img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
 
             # Fourier Transform
-            fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
+            if meta.split_spectrum:
+                # Split Spectrum Fourier Transform
+                half_point = img_disp_comp.shape[-1] // 2
+                img_disp_comp_split = torch.zeros((img_disp_comp.shape[0]*2, half_point), dtype=img_disp_comp.dtype)
+
+                img_disp_comp_split[0::4, :] = img_disp_comp[0::2, :half_point]
+                img_disp_comp_split[1::4, :] = img_disp_comp[0::2, half_point:]
+                img_disp_comp_split[3::4, :] = img_disp_comp[1::2, half_point:]
+                img_disp_comp_split[2::4, :] = img_disp_comp[1::2, :half_point]
+
+                fft_signal = torch.fft.ifft(img_disp_comp_split, dim=-1)
+
+            else:
+                # Standard Fourier Transform
+                fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
 
             if meta.full_range:
                 temp_frame = torch.abs(fft_signal) #full range
@@ -527,7 +662,6 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
     #it should be double sided first, before desine
     if meta.double_side:
         if meta.bmscan >1:
-            #TODO: Handle Vista Scans properly
             if meta.vista >1:
                 oct_vol_array = reshuffle_vista_frames_torch(oct_vol_array, meta.vista, meta.bmscan)
 
@@ -562,7 +696,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
     show_info("Starting unp file processing.")
 
     indices = meta.sine_frame_indices
-    pause_index = indices[::2]
+    pause_index = indices[0::2]
 
     print("Pause indices:", pause_index)
 
@@ -595,16 +729,19 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
     with open(unp_file_path, "rb", buffering=0) as byte_reader:
         
         # 1D Hamming window (like np.hamming)
-        hamming = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
+        # hamming = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
+        hamming = getWindow(meta.width, meta.windowType, dtype=torch.float32, device=device)
         hamming = hamming.unsqueeze(0).repeat(meta.height, 1)
         # hamming_signal = subtracted_signal * hamming
 
-        hamming_hires = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
+        # hamming_hires = torch.hamming_window(meta.width, periodic=False, dtype=torch.float32, device=device)
+        hamming_hires = getWindow(meta.width, meta.windowType, dtype=torch.float32, device=device)
         hamming_hires = hamming_hires.unsqueeze(0).repeat(hires_h, 1)
 
         dispMaxOrder = 3
 
-        dispCoeffs = torch.tensor([meta.c2, meta.c3], device=device) #disable dispersion compensation
+        #TODO this function does not include autodispersion yet. It should be added in the future, but for now we can just use the same coefficients as the low-res frames.
+        #Will add this function in the future for batch processing
 
         frame_counter = 0
         frame_counter_lowres = 0
@@ -619,11 +756,15 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
                 for _ in range(hires_d):
                     if meta.packed:
                         raw_data = np.frombuffer(byte_reader.read(data_size_bytes * hires_ratio), dtype="<u1")
+                        if raw_data.size != data_size_bytes * hires_ratio:
+                            continue
                         raw_data = torch.tensor(raw_data).to(device)
                         raw = unpack12_torch(raw_data)
                         raw = raw.reshape((hires_h, meta.width))
                     else:
                         raw_data = np.frombuffer(byte_reader.read(data_size_bytes*hires_ratio), dtype=np.uint16)
+                        if raw_data.size != meta.height * meta.width * hires_ratio:
+                            continue
                         raw = raw_data.reshape((hires_h, meta.width)).astype(np.float32)
                         raw = torch.tensor(raw).to(device)
 
@@ -636,10 +777,41 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
                     # Hamming windowing
                     hamming_signal = subtracted_signal * hamming_hires
 
-                    img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffs)
+                    img_disp_comp = torch.zeros_like(hamming_signal, dtype=torch.complex64, device=device)
+
+                    if meta.split_dispersion:
+                        dispCoeffsA = [meta.c2A, meta.c3A]
+                        dispCoeffsB = [meta.c2B, meta.c3B]
+                        img_disp_comp[0::2] = comp_dis_phase_torch(hamming_signal[0::2], dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
+                        img_disp_comp[1::2] = comp_dis_phase_torch(hamming_signal[1::2], dispMaxOrder, dispCoeffsB, mode=meta.dispersion_mode)
+                    else:
+                        dispCoeffsA = [meta.c2A, meta.c3A]
+                        img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
+                        # dispCoeffsB = [-1.0*meta.c2A, -1.0*meta.c3A]
+                        # img_disp_comp[0::2] = comp_dis_phase_torch(hamming_signal[0::2], dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
+                        # img_disp_comp[1::2] = comp_dis_phase_torch(hamming_signal[1::2], dispMaxOrder, dispCoeffsB, mode=meta.dispersion_mode)
+
 
                     # Fourier Transform
-                    fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
+                    if meta.split_spectrum:
+                        # Split Spectrum Fourier Transform
+                        half_point = img_disp_comp.shape[-1] // 2
+                        img_disp_comp_split = torch.zeros((img_disp_comp.shape[0]*2, half_point), dtype=img_disp_comp.dtype)
+
+                        img_disp_comp_split[0::4, :] = img_disp_comp[0::2, :half_point]
+                        img_disp_comp_split[1::4, :] = img_disp_comp[0::2, half_point:]
+
+                        img_disp_comp_split[3::4, :] = img_disp_comp[1::2, half_point:]
+                        # img_disp_comp_split[2::4, :] = torch.flip(img_disp_comp_split[2::4, :], dims=[1])
+                        img_disp_comp_split[2::4, :] = img_disp_comp[1::2, :half_point]
+                        # img_disp_comp_split[3::4, :] = torch.flip(img_disp_comp_split[3::4, :], dims=[1])
+
+                        fft_signal = torch.fft.ifft(img_disp_comp_split, dim=-1)
+
+                    else:
+                        # Standard Fourier Transform
+                        # img_disp_comp[1::2, :] = torch.flip(img_disp_comp[1::2, :], dims=[1]) #flip the odd frames
+                        fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
 
                     if meta.full_range:
                         temp_frame = torch.abs(fft_signal)  # full range
@@ -658,15 +830,18 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
             else:
                 if meta.packed:
                     raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype="<u1")
+                    if raw_data.size != data_size_bytes:
+                        continue
                     raw_data = torch.tensor(raw_data).to(device)
                     raw = unpack12_torch(raw_data)
                     raw = raw.reshape((meta.height, meta.width))
                 else:
                     raw_data = np.frombuffer(byte_reader.read(data_size_bytes), dtype=np.uint16)
+                    if raw_data.size != meta.height * meta.width:
+                        continue
                     raw = raw_data.reshape((meta.height, meta.width)).astype(np.float32)
                     raw = torch.tensor(raw).to(device)
 
-                # Subtract the DC signal
                 if meta.dcSubtract:
                 # Subtract the DC signal
                     subtracted_signal = dc_subtraction_double_sweep_torch(raw)
@@ -675,11 +850,35 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
 
                 # Hamming windowing
                 hamming_signal = subtracted_signal * hamming
+
+                img_disp_comp = torch.zeros_like(hamming_signal, dtype=torch.complex64, device=device)
                 
-                img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffs)
+                if meta.split_dispersion:
+                    dispCoeffsA = [meta.c2A, meta.c3A]
+                    dispCoeffsB = [meta.c2B, meta.c3B]
+                    img_disp_comp[0::2] = comp_dis_phase_torch(hamming_signal[0::2], dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
+                    img_disp_comp[1::2] = comp_dis_phase_torch(hamming_signal[1::2], dispMaxOrder, dispCoeffsB, mode=meta.dispersion_mode)
+                else:
+                    dispCoeffsA = [meta.c2A, meta.c3A]
+                    img_disp_comp = comp_dis_phase_torch(hamming_signal, dispMaxOrder, dispCoeffsA, mode=meta.dispersion_mode)
 
                 # Fourier Transform
-                fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
+                if meta.split_spectrum:
+                    # Split Spectrum Fourier Transform
+                    half_point = img_disp_comp.shape[-1] // 2
+                    img_disp_comp_split = torch.zeros((img_disp_comp.shape[0]*2, half_point), dtype=img_disp_comp.dtype)
+
+                    img_disp_comp_split[0::4, :] = img_disp_comp[0::2, :half_point]
+                    img_disp_comp_split[1::4, :] = img_disp_comp[0::2, half_point:]
+
+                    img_disp_comp_split[3::4, :] = img_disp_comp[1::2, half_point:]
+                    img_disp_comp_split[2::4, :] = img_disp_comp[1::2, :half_point]
+
+                    fft_signal = torch.fft.ifft(img_disp_comp_split, dim=-1)
+
+                else:
+                    # Standard Fourier Transform
+                    fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
 
                 if meta.full_range:
                     temp_frame = torch.abs(fft_signal) #full range

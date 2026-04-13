@@ -73,12 +73,13 @@ def compile_ui(ui_file: str, py_file: str):
 
 if __name__ == "__main__":
     print(os.getcwd())
-    compile_ui("bidirectional_ascan_registration_form.ui", "_bidirectional_ascan_registration_form.py")
-    # patch_ui_py("_bidirectional_ascan_registration_form.py")
+    compile_ui("C:\\napari\\napari-cool-tools\\experimental\\Split Spectrum\\split_spectrum_form.ui",
+                "C:\\napari\\napari-cool-tools\\experimental\\Split Spectrum\\split_spectrum_form.py")
 
     app = QApplication(sys.argv)
-    from _bidirectional_ascan_registration_widget import Bidirectional_Ascan_Registration_Widget
 
-    widget = Bidirectional_Ascan_Registration_Widget()
+    from split_spectrum_widget import Split_Spectrum_Widget
+
+    widget = Split_Spectrum_Widget()
     widget.show()
     sys.exit(app.exec())

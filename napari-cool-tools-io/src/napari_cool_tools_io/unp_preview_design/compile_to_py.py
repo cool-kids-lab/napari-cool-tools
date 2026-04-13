@@ -70,10 +70,9 @@ def compile_ui(ui_file: str, py_file: str):
     except FileNotFoundError:
         raise FileNotFoundError(f"Could not run command: {' '.join(cmd)}\nMake sure {backend} is properly installed.")
 
-
 if __name__ == "__main__":
-    # print(os.getcwd())
-    # compile_ui("unp_preview.ui", "_unp_preview.py")
+    print(os.getcwd())
+    compile_ui("unp_preview.ui", "_unp_preview.py")
     # patch_ui_py("_unp_preview.py")
 
     app = QApplication(sys.argv)

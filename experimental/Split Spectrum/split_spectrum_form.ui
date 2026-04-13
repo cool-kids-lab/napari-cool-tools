@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1015</width>
-    <height>659</height>
+    <width>1202</width>
+    <height>905</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,17 +19,7 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" rowstretch="8,2" columnstretch="6,4">
-   <item row="0" column="0">
-    <widget class="QWidget" name="graphicsViewPlaceHolder" native="true">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-    </widget>
-   </item>
+  <layout class="QGridLayout" name="gridLayout" rowstretch="8,0" columnstretch="0,0">
    <item row="0" column="1">
     <widget class="QFrame" name="controlFrame">
      <property name="sizePolicy">
@@ -59,9 +49,130 @@
         <property name="currentIndex">
          <number>0</number>
         </property>
-        <widget class="QWidget" name="polynomialTab">
+        <widget class="QWidget" name="spectrum_tab">
          <attribute name="title">
-          <string>Polynomial</string>
+          <string>Spectrum</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,2">
+          <item>
+           <widget class="QWidget" name="plotViewPlaceHolder" native="true"/>
+          </item>
+          <item>
+           <widget class="QFrame" name="frame_2">
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <layout class="QGridLayout" name="gridLayout_5">
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="checkBox">
+               <property name="text">
+                <string>Split Spectrum</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QCheckBox" name="checkBox_2">
+               <property name="text">
+                <string>Half Window</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="4">
+              <spacer name="horizontalSpacer_4">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="2" column="2">
+              <widget class="QCheckBox" name="checkBox_4">
+               <property name="text">
+                <string>Half Window</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="3">
+              <widget class="QCheckBox" name="checkBox_5">
+               <property name="text">
+                <string>Half window</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QCheckBox" name="checkBox_3">
+               <property name="text">
+                <string>Half Window</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="3">
+              <spacer name="verticalSpacer">
+               <property name="orientation">
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>40</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="2">
+              <widget class="QComboBox" name="comboBox"/>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="label_10">
+               <property name="text">
+                <string>Window</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_11">
+               <property name="text">
+                <string>TextLabel</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="label_12">
+               <property name="text">
+                <string>TextLabel</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QLabel" name="label_13">
+               <property name="text">
+                <string>TextLabel</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="3">
+              <widget class="QLabel" name="label_15">
+               <property name="text">
+                <string>TextLabel</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="registration_tab">
+         <attribute name="title">
+          <string>Registration</string>
          </attribute>
          <layout class="QGridLayout" name="gridLayout_4">
           <item row="12" column="1">
@@ -480,7 +591,7 @@
     </widget>
    </item>
    <item row="1" column="1">
-    <widget class="QFrame" name="frame_2">
+    <widget class="QFrame" name="filler_frame_1">
      <property name="frameShape">
       <enum>QFrame::NoFrame</enum>
      </property>
@@ -519,6 +630,23 @@
            <property name="text">
             <string>Volume Shape:</string>
            </property>
+           <property name="alignment">
+            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QPushButton" name="saveFileButton">
+           <property name="text">
+            <string>Save</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QPushButton" name="loadFileButton">
+           <property name="text">
+            <string>Load</string>
+           </property>
           </widget>
          </item>
          <item row="1" column="0">
@@ -526,15 +654,15 @@
            <property name="text">
             <string>TextLabel</string>
            </property>
+           <property name="alignment">
+            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+           </property>
           </widget>
          </item>
-         <item row="2" column="0">
-          <widget class="QDialogButtonBox" name="buttonBox">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="standardButtons">
-            <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+         <item row="3" column="0">
+          <widget class="QPushButton" name="napariButton">
+           <property name="text">
+            <string>Napari</string>
            </property>
           </widget>
          </item>
@@ -560,37 +688,44 @@
          <enum>QFrame::NoFrame</enum>
         </property>
         <layout class="QGridLayout" name="gridLayout_3">
-         <item row="3" column="1">
+         <item row="2" column="1">
           <widget class="QDoubleSpinBox" name="minSpinBox">
            <property name="maximum">
             <double>1000000.000000000000000</double>
            </property>
            <property name="singleStep">
-            <double>0.100000000000000</double>
+            <double>1.000000000000000</double>
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_17">
+           <property name="text">
+            <string>Frame #</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
           <widget class="QLabel" name="label_3">
            <property name="text">
             <string>Max</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_18">
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_2">
            <property name="text">
-            <string>Averaging</string>
+            <string>Min</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="1">
+         <item row="3" column="1">
           <widget class="QDoubleSpinBox" name="maxSpinBox">
            <property name="maximum">
             <double>1000000.000000000000000</double>
            </property>
            <property name="singleStep">
-            <double>0.100000000000000</double>
+            <double>1.000000000000000</double>
            </property>
            <property name="value">
             <double>1.000000000000000</double>
@@ -604,20 +739,6 @@
            </property>
           </widget>
          </item>
-         <item row="3" column="0">
-          <widget class="QLabel" name="label_2">
-           <property name="text">
-            <string>Min</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_17">
-           <property name="text">
-            <string>Frame #</string>
-           </property>
-          </widget>
-         </item>
          <item row="1" column="1">
           <widget class="QSpinBox" name="averageSpinBox">
            <property name="minimum">
@@ -628,17 +749,10 @@
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
-          <widget class="QSpinBox" name="bmscanSpinBox">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="label_10">
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_18">
            <property name="text">
-            <string>BMScan</string>
+            <string>Averaging</string>
            </property>
           </widget>
          </item>
@@ -670,60 +784,30 @@
          <enum>QFrame::NoFrame</enum>
         </property>
         <layout class="QGridLayout" name="gridLayout_13">
-         <item row="3" column="0">
-          <widget class="QCheckBox" name="cropCheckBox">
-           <property name="text">
-            <string>Crop</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QComboBox" name="splitModeComboBox">
-           <item>
-            <property name="text">
-             <string>Dual</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>Quad</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QCheckBox" name="flipABCheckBox">
-           <property name="text">
-            <string>Flip A/B</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
+         <item row="1" column="0">
           <widget class="QCheckBox" name="desineCheckBox">
            <property name="text">
             <string>Desine</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
-          <widget class="QCheckBox" name="dualEdgeCheckBox">
+         <item row="2" column="0">
+          <widget class="QCheckBox" name="dcSubtractCheckBox">
            <property name="text">
-            <string>Dual Edge</string>
+            <string>DC Substraction</string>
            </property>
            <property name="checked">
             <bool>true</bool>
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_11">
-           <property name="font">
-            <font>
-             <underline>true</underline>
-            </font>
-           </property>
+         <item row="0" column="0">
+          <widget class="QCheckBox" name="doubleSideCheckBox">
            <property name="text">
-            <string>Split Mode</string>
+            <string>Double Side</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -733,41 +817,18 @@
      </layout>
     </widget>
    </item>
+   <item row="0" column="0">
+    <widget class="QWidget" name="graphicsViewPlaceHolder" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>Dialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>rejected()</signal>
-   <receiver>Dialog</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>316</x>
-     <y>260</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>286</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

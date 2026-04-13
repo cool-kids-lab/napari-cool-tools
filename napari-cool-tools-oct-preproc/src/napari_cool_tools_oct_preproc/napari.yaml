@@ -17,10 +17,28 @@ contributions:
     - id: napari-cool-tools-oct-preproc.auto_contrast
       title: Auto Contrast Image
       python_name: napari_cool_tools_oct_preproc._oct_preproc:auto_contrast_plugin
+    - id: napari-cool-tools-oct-preproc.auto_contrast_split
+      title: Auto Contrast Image Split A/B
+      python_name: napari_cool_tools_oct_preproc._oct_preproc:auto_contrast_split_plugin
+    - id: napari-cool-tools-oct-preproc.auto_contrast_split_quad
+      title: Auto Contrast Image Split A/B/C/D
+      python_name: napari_cool_tools_oct_preproc._oct_preproc:auto_contrast_split_quad_plugin
+    - id: napari-cool-tools-oct-preproc.split_normalize
+      title: Split and Normalize Image
+      python_name: napari_cool_tools_oct_preproc._oct_preproc:split_normalize_plugin
 
   widgets:
     - command: napari-cool-tools-oct-preproc.auto_contrast
       display_name: Auto Contrast Image
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.auto_contrast_split
+      display_name: Auto Contrast Image Split A/B
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.auto_contrast_split_quad
+      display_name: Auto Contrast Image Split A/B/C/D
+      autogenerate: true
+    - command: napari-cool-tools-oct-preproc.split_normalize
+      display_name: Split and Normalize Image
       autogenerate: true
     - command: napari-cool-tools-oct-preproc.unwarp_sine
       display_name: Unwarp Sine Scan

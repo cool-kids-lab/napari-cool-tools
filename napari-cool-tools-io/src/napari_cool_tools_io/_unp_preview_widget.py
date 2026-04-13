@@ -4,7 +4,7 @@ from napari_cool_tools_io._unp_preview import Ui_Dialog
 import pyqtgraph as pg
 import numpy as np
 from pathlib import Path
-from napari_cool_tools_io import unp_meta
+from napari_cool_tools_io import getWindow, unp_meta
 import torch
 import math
 from napari_cool_tools_io import device
@@ -54,11 +54,24 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         self.viewer.ui.menuBtn.hide()
         self.viewer.ui.histogram.hide()
 
+        self.dispC2BSpinBox.hide()
+        self.dispC3BSpinBox.hide()
+
+        self.splitDispersionCheckBox.stateChanged.connect(self.dispC2BSpinBox.setVisible)
+        self.splitDispersionCheckBox.stateChanged.connect(self.dispC3BSpinBox.setVisible)
+
         self.minIntensitySpinBox.valueChanged.connect(self.updateImage)
         self.maxIntensitySpinBox.valueChanged.connect(self.updateImage)
 
-        self.dispC2SpinBox.valueChanged.connect(self.updateImage)
-        self.dispC3SpinBox.valueChanged.connect(self.updateImage)
+        self.dispC2ASpinBox.valueChanged.connect(self.updateImage)
+        self.dispC3ASpinBox.valueChanged.connect(self.updateImage)
+        self.dispC2BSpinBox.valueChanged.connect(self.updateImage)
+        self.dispC3BSpinBox.valueChanged.connect(self.updateImage)
+        self.splitDispersionCheckBox.stateChanged.connect(self.updateImage)
+        self.dispersionModeComboBox.currentIndexChanged.connect(self.updateImage)
+        self.windowComboBox.currentIndexChanged.connect(self.updateImage)
+        self.splitSpectrumCheckBox.stateChanged.connect(self.updateImage)
+
         self.fullRangeCheckBox.stateChanged.connect(self.updateImage)
         self.desineCheckBox.stateChanged.connect(self.updateImage)
         self.logScaleCheckBox.stateChanged.connect(self.updateImage)
@@ -92,22 +105,49 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
             else:
                 subtracted_signal = self.raw_data[idx]
 
-            hamming = torch.hamming_window(self.meta.width, periodic=False, dtype=subtracted_signal.dtype, device=subtracted_signal.device)
+            hamming = getWindow(self.meta.width, self.windowComboBox.currentIndex(), subtracted_signal.dtype, subtracted_signal.device)
 
             # Hamming windowing
             hamming_signal = subtracted_signal * hamming
 
-            dispCoeffs = [self.dispC2SpinBox.value(), self.dispC3SpinBox.value()]
-            
-            img_disp_comp = comp_dis_phase_torch(hamming_signal, 3, dispCoeffs)
+            img_disp_comp = torch.zeros_like(hamming_signal,dtype=torch.complex64)
+
+
+            #apply dispersion first before splitting
+            if self.splitDispersionCheckBox.isChecked():
+                dispCoeffsA = [self.dispC2ASpinBox.value(), self.dispC3ASpinBox.value()]
+                img_disp_comp[0::2] = comp_dis_phase_torch(hamming_signal[0::2], 3, dispCoeffsA, mode=self.dispersionModeComboBox.currentIndex())
+                dispCoeffsB = [self.dispC2BSpinBox.value(), self.dispC3BSpinBox.value()]
+                img_disp_comp[1::2] = comp_dis_phase_torch(hamming_signal[1::2], 3, dispCoeffsB, mode=self.dispersionModeComboBox.currentIndex())
+
+            else:
+                dispCoeffsA = [self.dispC2ASpinBox.value(), self.dispC3ASpinBox.value()]
+                img_disp_comp = comp_dis_phase_torch(hamming_signal, 3, dispCoeffsA, mode=self.dispersionModeComboBox.currentIndex())
 
             # Fourier Transform
-            fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
+            if self.splitSpectrumCheckBox.isChecked():
+                # Split Spectrum Fourier Transform
+                half_point = img_disp_comp.shape[-1] // 2
+                img_disp_comp_split = torch.zeros((img_disp_comp.shape[0]*2, half_point), dtype=img_disp_comp.dtype)
+
+                img_disp_comp_split[0::4, :] = img_disp_comp[0::2, :half_point]
+                img_disp_comp_split[1::4, :] = img_disp_comp[0::2, half_point:]
+
+                img_disp_comp_split[3::4, :] = img_disp_comp[1::2, half_point:]
+                img_disp_comp_split[2::4, :] = img_disp_comp[1::2, :half_point]
+
+                fft_signal = torch.fft.ifft(img_disp_comp_split, dim=-1)
+
+            else:
+                # Standard Fourier Transform
+                # img_disp_comp[1::2, :] = torch.flip(img_disp_comp[1::2, :], dims=[1]) #flip the odd frames
+                fft_signal = torch.fft.ifft(img_disp_comp, dim=-1)
 
             if self.fullRangeCheckBox.isChecked():
                 temp_frame = torch.abs(fft_signal) #full range
             else:
                 temp_frame = torch.abs(fft_signal[:, int(fft_signal.shape[1] / 2):]) #take the negative part
+                # temp_frame = torch.abs(fft_signal[:, :int(fft_signal.shape[1] / 2)]) #take the positive part
 
             if self.logScaleCheckBox.isChecked():
                 temp_frame = 20 * torch.log10(temp_frame + 1e-6)
@@ -128,6 +168,8 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
             temp_frame = desine(temp_frame, mode="bilinear", transpose=True, scale_fac=2)
         
         temp_frame = temp_frame.cpu().numpy()
+
+        # temp_frame = temp_frame[::2,:]#reverse the x axis for better visualization
 
         current_size = self.viewer.getImageItem().image.shape # type: ignore
         next_size = temp_frame.shape # type: ignore
@@ -172,12 +214,20 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
                 if self.meta.packed:
                     ref_RawData = byte_reader.read(data_size_bytes)
                     array = np.frombuffer(ref_RawData, dtype="<u1")
+
+                    if array.size != data_size_bytes:
+                        array = np.zeros(data_size_bytes, dtype="<u1")
+
                     array = torch.tensor(array).to(device)
                     array = unpack12_torch(array)
                     array = array.reshape((self.meta.height, self.meta.width))
                 else:    
                     ref_RawData = byte_reader.read(data_size_bytes)
                     array = np.frombuffer(ref_RawData, dtype=np.uint16)
+
+                    if array.size != self.meta.width * self.meta.height:
+                        array = np.zeros(self.meta.height*self.meta.width, dtype=np.uint16)
+
                     array = array.reshape((self.meta.height, self.meta.width)).astype(np.float32)
                     array = torch.tensor(array).to(device)
 
@@ -249,57 +299,124 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
             else:
                 subtracted_signal = self.raw_data[idx]
 
-            hamming = torch.hamming_window(self.meta.width, periodic=False, dtype=subtracted_signal.dtype, device=subtracted_signal.device)
+            # hamming = torch.hamming_window(self.meta.width, periodic=False, dtype=subtracted_signal.dtype, device=subtracted_signal.device)
+            hamming = getWindow(self.meta.width, self.windowComboBox.currentIndex(), subtracted_signal.dtype, subtracted_signal.device)
 
             # Hamming windowing
             hamming_signal = subtracted_signal * hamming
+
             temp_raw_data.append(hamming_signal)
+
+        temp_raw_data = torch.stack(temp_raw_data, dim=0)
+
+        print(f'temp_raw_data.shape: {temp_raw_data.shape}')
 
         maxDispOrders = 3
         coefRange = self.autoDispRangeSpinBox.value()
-        arrCountDispCoeff = torch.zeros((maxDispOrders - 1, 1),device=device, dtype=torch.float32)
 
-        for idx_CounterDispCoef in tqdm(
-            range(0, len(arrCountDispCoeff)), desc="Calculating Dispersion Coefficients"
-        ):
-            arrDispCoeffRange = np.arange(-1 * coefRange, coefRange + 1, 1)
-            arrCost = np.zeros((arrDispCoeffRange.shape[0]))
+        if self.splitDispersionCheckBox.isChecked():
+            #dispersion for the even frames
+            arrCountDispCoeffA = [0,0]
 
-            for k in tqdm(range(0, len(arrDispCoeffRange)), desc="Calculating Costs"):
-                arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[k]
-                arrCost[k] = self.cal_cost_function_torch(temp_raw_data, maxDispOrders, arrCountDispCoeff)
-                # print(f'k={k}, cost={arrCost[k]}')
+            for idx_CounterDispCoef in tqdm(
+                range(0, len(arrCountDispCoeffA)), desc="Calculating Dispersion Coefficients A"
+            ):
+                arrDispCoeffRange = np.arange(-1 * coefRange, coefRange + 1, 1)
+                arrCost = np.zeros((arrDispCoeffRange.shape[0]))
 
-            argMinCost = arrCost.argmax()
-            arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[argMinCost]
+                for k in tqdm(range(0, len(arrDispCoeffRange)), desc="Calculating Costs A"):
+                    arrCountDispCoeffA[idx_CounterDispCoef] = arrDispCoeffRange[k]
+                    arrCost[k] = self.cal_cost_function_torch(temp_raw_data[:,0::2,:], maxDispOrders, arrCountDispCoeffA, dispersion_mode=self.dispersionModeComboBox.currentIndex())
+                    # print(f'k={k}, cost={arrCost[k]}')
 
-        arrCountDispCoeff = arrCountDispCoeff.cpu().numpy()
+                argMinCost = arrCost.argmax()
+                arrCountDispCoeffA[idx_CounterDispCoef] = arrDispCoeffRange[argMinCost]
 
-        # print(arrCountDispCoeff)
+            arrCountDispCoeffA = arrCountDispCoeffA
 
-        self.dispC2SpinBox.setValue(float(arrCountDispCoeff[0]))
-        self.dispC3SpinBox.setValue(float(arrCountDispCoeff[1]))
+            self.dispC2ASpinBox.setValue(float(arrCountDispCoeffA[0]))
+            self.dispC3ASpinBox.setValue(float(arrCountDispCoeffA[1]))
 
-        # return arrCountDispCoeff
+            #dispersion for the odd frames
+            arrCountDispCoeffB = [0,0]
 
-    def cal_cost_function_torch(self, raw_data_list, dispMaxOrder, dispCoeffs):
+            for idx_CounterDispCoef in tqdm(
+                range(0, len(arrCountDispCoeffB)), desc="Calculating Dispersion Coefficients B"
+            ):
+                arrDispCoeffRange = np.arange(-1 * coefRange, coefRange + 1, 1)
+                arrCost = np.zeros((arrDispCoeffRange.shape[0]))
+
+                for k in tqdm(range(0, len(arrDispCoeffRange)), desc="Calculating Costs B"):
+                    arrCountDispCoeffB[idx_CounterDispCoef] = arrDispCoeffRange[k]
+                    arrCost[k] = self.cal_cost_function_torch(temp_raw_data[:,1::2,:], maxDispOrders, arrCountDispCoeffB, dispersion_mode=self.dispersionModeComboBox.currentIndex())
+                    # print(f'k={k}, cost={arrCost[k]}')
+
+                argMinCost = arrCost.argmax()
+                arrCountDispCoeffB[idx_CounterDispCoef] = arrDispCoeffRange[argMinCost]
+
+            arrCountDispCoeffB = arrCountDispCoeffB
+
+            self.dispC2BSpinBox.setValue(float(arrCountDispCoeffB[0]))
+            self.dispC3BSpinBox.setValue(float(arrCountDispCoeffB[1]))
+
+        else:
+
+            arrCountDispCoeff = [0,0]
+
+            for idx_CounterDispCoef in tqdm(
+                range(0, len(arrCountDispCoeff)), desc="Calculating Dispersion Coefficients"
+            ):
+                arrDispCoeffRange = np.arange(-1 * coefRange, coefRange + 1, 1)
+                arrCost = np.zeros((arrDispCoeffRange.shape[0]))
+
+                for k in tqdm(range(0, len(arrDispCoeffRange)), desc="Calculating Costs"):
+                    arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[k]
+                    arrCost[k] = self.cal_cost_function_torch(temp_raw_data, maxDispOrders, arrCountDispCoeff, dispersion_mode=self.dispersionModeComboBox.currentIndex())
+
+                argMinCost = arrCost.argmax()
+                arrCountDispCoeff[idx_CounterDispCoef] = arrDispCoeffRange[argMinCost]
+
+            arrCountDispCoeff = arrCountDispCoeff
+
+            self.dispC2ASpinBox.setValue(float(arrCountDispCoeff[0]))
+            self.dispC3ASpinBox.setValue(float(arrCountDispCoeff[1]))
+
+
+    def cal_cost_function_torch(self, raw_data_list : torch.tensor, dispMaxOrder, dispCoeffs: list, dispersion_mode=0):
 
         temp_frames = []
 
+        
+        current_frame_num = self.frameNumberSpinBox.value()
+        cframe = int(np.floor((current_frame_num)/(self.meta.bmscan)))
+
         for idx in range(0, len(raw_data_list)):
-            data_disp_comp = comp_dis_phase_torch(raw_data_list[idx], dispMaxOrder, dispCoeffs)
+            data_disp_comp = comp_dis_phase_torch(raw_data_list[idx], dispMaxOrder, dispCoeffs, mode=dispersion_mode)
 
             # FFT magnitude squared
             toct = torch.abs(torch.fft.ifft(data_disp_comp, dim=-1))
             
             # Avoid edges
             temp_frame = toct[:, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
+
+            #determined double side
+            if self.doubleSideCheckBox.isChecked():
+                if (cframe % 2):
+                    temp_frame = torch.flip(temp_frame, dims=[0])
+
             temp_frames.append(temp_frame)
 
         temp_frames = torch.stack(temp_frames, dim=0)
 
-        if self.doubleSideCheckBox.isChecked():
-            temp_frames[1::2] = torch.flip(temp_frames[1::2], dims=[1])
+        # #determined double side
+        # if self.doubleSideCheckBox.isChecked():
+        #     current_frame_num = self.frameNumberSpinBox.value()
+        #     cframe = int(np.floor((current_frame_num)/(self.meta.bmscan)))
+        #     if (cframe % 2):
+        #         temp_frames[1::2] = torch.flip(temp_frames[1::2], dims=[1])
+
+        # if self.doubleSideCheckBox.isChecked():
+        #     temp_frames[1::2] = torch.flip(temp_frames[1::2], dims=[1])
 
         mean_frame = torch.mean(temp_frames, dim=0)**2
 

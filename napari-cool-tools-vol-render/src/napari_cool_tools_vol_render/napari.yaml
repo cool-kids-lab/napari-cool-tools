@@ -1,0 +1,11 @@
+name: napari-cool-tools-vol-render
+display_name: COOL Tools Volume Rendering
+contributions:
+  commands:
+    - id: napari-cool-tools-vol-render.pyvista_render
+      title: 3D Rendering PyVista
+      python_name: napari_cool_tools_vol_render._rendering_tools:pyvista_render_plugin
+  widgets:
+    - command: napari-cool-tools-vol-render.pyvista_render
+      display_name: 3D Rendering PyVista
+      autogenerate: true

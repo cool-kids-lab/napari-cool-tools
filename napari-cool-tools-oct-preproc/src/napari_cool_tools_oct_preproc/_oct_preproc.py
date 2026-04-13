@@ -1,13 +1,221 @@
-from napari_cool_tools_oct_preproc._oct_preproc_func import auto_contrast, desine, generate_octa
+from napari_cool_tools_oct_preproc._oct_preproc_func import auto_contrast, auto_contrast_split
+from napari_cool_tools_oct_preproc._oct_preproc_func import auto_contrast_split_quad, desine, generate_octa
 import torch
 from napari_cool_tools_io import viewer, device
 from napari.layers import Image, Layer, Labels
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info, show_error
-from napari_cool_tools_oct_preproc import OCTACalc
+from napari_cool_tools_oct_preproc import OCTACalc, SplitMode
 
 import numpy as np
 from magicgui import magic_factory
+
+def split_normalize_plugin(
+    img: Image,
+    mode: SplitMode = SplitMode.DUAL,
+    double_side: bool = True,
+):
+    split_normalize_thread(img=img, mode=mode, double_side=double_side) # type: ignore
+
+@thread_worker(connect={"yielded": viewer.add_layer})
+def split_normalize_thread(img: Image, mode: SplitMode = SplitMode.DUAL, double_side: bool = True):
+    """"""
+
+    show_info("Starting split and normalize...")
+
+    add_kwargs = {"name": f"{img.name}_normalized"}
+    input_data = torch.Tensor(img.data).to(device)
+
+    if double_side:
+        input_data[:,:,1::2] = torch.flip(input_data[:,:,1::2], dims=[2])# flip for double side image
+
+    if mode == SplitMode.DUAL:
+        for i in range(2):
+            data_temp = input_data[:,i::2,:]
+            ave = data_temp.mean()
+            data_temp = data_temp - ave
+            sstd = torch.std(data_temp)
+            input_data[:,i::2,:] = data_temp/sstd
+
+    elif mode == SplitMode.QUAD:
+        for i in range(4):
+            data_temp = input_data[:,i::4,:]
+            ave = data_temp.mean()
+            data_temp = data_temp - ave
+            sstd = torch.std(data_temp)
+            input_data[:,i::4,:] = data_temp/sstd
+
+
+    if double_side:
+        input_data[:,:,1::2] = torch.flip(input_data[:,:,1::2], dims=[2])# flip for double side image
+
+    output_data = input_data.cpu().numpy()
+    layer = Layer.create(output_data, add_kwargs, "image")
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
+    show_info("Finished split and normalize.")
+
+    yield layer
+
+def auto_contrast_split_plugin(
+    img: Image,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    num_averages: int = 1,
+    double_side: bool = True,
+):
+    
+    auto_contrast_split_thread(
+        img=img,
+        lower_percentileA=lower_percentileA,
+        upper_percentileA=upper_percentileA,
+        lower_percentileB=lower_percentileB,
+        upper_percentileB=upper_percentileB,
+        num_averages=num_averages,
+        double_side=double_side,
+    ) # type: ignore
+
+@thread_worker(connect={"yielded": viewer.add_layer})    
+def auto_contrast_split_thread(
+    img: Image,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    num_averages: int = 1,
+    double_side: bool = True,
+):
+    """"""
+
+    show_info("Starting auto contrast split...")
+
+    add_kwargs = {"name": f"{img.name}_auto_contrast_split"}
+    input_data = torch.Tensor(img.data).to(device)
+
+    if double_side:
+        input_data[:,:,1::2] = torch.flip(input_data[:,:,1::2], dims=[2])# flip for double side image
+
+    output_data = auto_contrast_split(
+        input_data,
+        lower_percentileA=lower_percentileA,
+        upper_percentileA=upper_percentileA,
+        lower_percentileB=lower_percentileB,
+        upper_percentileB=upper_percentileB,
+        num_averages=num_averages,
+    )
+
+    if double_side:
+        output_data[:,:,1::2] = torch.flip(output_data[:,:,1::2], dims=[2])# flip for double side image
+
+    output_data_cpu = output_data.cpu().numpy()
+    layer = Layer.create(output_data_cpu, add_kwargs, "image")
+
+    auto_contrast(
+        layer,
+        lower_percentile=lower_percentileA,
+        upper_percentile=upper_percentileA,
+        num_averages=num_averages,
+    )
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
+    show_info("Finished auto contrast split.")
+
+    yield layer
+
+
+def auto_contrast_split_quad_plugin(
+    img: Image,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    lower_percentileC: float = 1.0,
+    upper_percentileC: float = 99.0,
+    lower_percentileD: float = 1.0,
+    upper_percentileD: float = 99.0,
+    num_averages: int = 1,
+    double_side: bool = True,
+):
+    auto_contrast_split_quad_thread(
+        img,
+        lower_percentileA=lower_percentileA,
+        upper_percentileA=upper_percentileA,
+        lower_percentileB=lower_percentileB,
+        upper_percentileB=upper_percentileB,
+        lower_percentileC=lower_percentileC,
+        upper_percentileC=upper_percentileC,
+        lower_percentileD=lower_percentileD,
+        upper_percentileD=upper_percentileD,
+        num_averages=num_averages,
+        double_side=double_side,
+    ) # type: ignore
+
+
+@thread_worker(connect={"yielded": viewer.add_layer})    
+def auto_contrast_split_quad_thread(
+    img: Image,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    lower_percentileC: float = 1.0,
+    upper_percentileC: float = 99.0,
+    lower_percentileD: float = 1.0,
+    upper_percentileD: float = 99.0,
+    num_averages: int = 1,
+    double_side: bool = True,
+):
+    """"""
+
+    show_info("Starting auto contrast split...")
+
+    add_kwargs = {"name": f"{img.name}_auto_contrast_quad"}
+    input_data = torch.Tensor(img.data).to(device)
+
+    if double_side:
+        input_data[:,:,1::2] = torch.flip(input_data[:,:,1::2], dims=[2])# flip for double side image
+
+    output_data = auto_contrast_split_quad(
+        input_data,
+        lower_percentileA=lower_percentileA,
+        upper_percentileA=upper_percentileA,
+        lower_percentileB=lower_percentileB,
+        upper_percentileB=upper_percentileB,
+        lower_percentileC=lower_percentileC,
+        upper_percentileC=upper_percentileC,
+        lower_percentileD=lower_percentileD,
+        upper_percentileD=upper_percentileD,
+        num_averages=num_averages,
+    )
+
+    if double_side:
+        output_data[:,:,1::2] = torch.flip(output_data[:,:,1::2], dims=[2])# flip for double side image
+
+    output_data_cpu = output_data.cpu().numpy()
+    layer = Layer.create(output_data_cpu, add_kwargs, "image")
+
+    auto_contrast(
+        layer,
+        lower_percentile=lower_percentileA,
+        upper_percentile=upper_percentileA,
+        num_averages=num_averages,
+    )
+
+    # Clear cache to free up memory
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
+    show_info("Finished auto contrast split.")
+
+    yield layer
 
 def auto_contrast_plugin(
     img: Image,
@@ -21,7 +229,6 @@ def auto_contrast_plugin(
         upper_percentile=upper_percentile,
         num_averages=num_averages,
     )
-
 
 
 def unwarp_sine_plugin(
@@ -45,7 +252,7 @@ def unwarp_sine_thread(img: Image, transpose: bool = False, interpolation_fac: i
     output_data_cpu = output_data.cpu().numpy()
     layer = Layer.create(output_data_cpu, add_kwargs, "image")
 
-    del input_data, output_data
+    # del input_data, output_data
     # Clear cache to free up memory
     if device.type == 'cuda':
         torch.cuda.empty_cache()
@@ -63,13 +270,14 @@ def generate_enface_plugin(
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
     desine_unwarp: bool = False,
+    crop: int = 0,
 ):
     
     if img.data.ndim != 3:
         show_error("Input volume must be 3D.")
         return
 
-    generate_enface_thread(img=img, axis=axis, projection_type=projection_type, desine_unwarp=desine_unwarp)
+    generate_enface_thread(img=img, axis=axis, projection_type=projection_type, desine_unwarp=desine_unwarp, crop=crop)
 
 
 @thread_worker(connect={"yielded": viewer.add_layer})
@@ -78,6 +286,7 @@ def generate_enface_thread(
     axis: ProjectionDir = ProjectionDir.EN_FACE,
     projection_type: ProjectionType = ProjectionType.MAX,
     desine_unwarp: bool = False,
+    crop: int = 0
 ):    
     if desine_unwarp:
         
@@ -89,7 +298,7 @@ def generate_enface_thread(
         if device.type == 'cuda':
             torch.cuda.empty_cache()
 
-        output_data_cpu = projection(data=output_data_cpu, axis=axis.value, projection_type=projection_type.value)
+        output_data_cpu = projection(data=output_data_cpu, axis=axis.value, projection_type=projection_type.value, crop=crop)
 
         axis_suffix = ""
         if axis == ProjectionDir.EN_FACE:
@@ -107,7 +316,7 @@ def generate_enface_thread(
         yield layer
 
     else:
-        output_data_cpu = projection(data=img.data, axis=axis.value, projection_type=projection_type.value)
+        output_data_cpu = projection(data=img.data, axis=axis.value, projection_type=projection_type.value, crop=crop)
 
         axis_suffix = ""
         if axis == ProjectionDir.EN_FACE:

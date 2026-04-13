@@ -21,9 +21,15 @@ class Operation(Enum):
     multiply = torch.mul
     divide = torch.div
 
-    # Enums are a convenient way to get a dropdown menu
+# Enums are a convenient way to get a dropdown menu
 class ShiftDir(Enum):
     """A set of valid directions for shifting an image."""
     AXIAL = 1
     LATERAL_FAST = 2
     LATERAL_SLOW = 0
+
+
+# Enums are a convenient way to get a dropdown menu
+class SplitMode(Enum):
+    DUAL= 2
+    QUAD = 4

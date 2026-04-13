@@ -104,9 +104,6 @@ def unp_proc_meta(path) -> unp_meta | None:
     meta = unp_meta()
     #width, height, depth = [4096, 800, 840]
 
-
-    # Unp_Preview_Widget()
-
     if Path(meta_path_ini).is_file():
         show_info(".ini Meta Data exists:")
 
@@ -125,12 +122,12 @@ def unp_proc_meta(path) -> unp_meta | None:
 
         if meta.pattern == "Sine_Pause":
 
-            if config.has_option('Scanning', 'Sine_Pause_Frame_Index'):
-                meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
-                meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
-            else:
-                meta.sine_frame_indices = [236, 254, 282, 300, 330, 348, 378, 396, 426, 444]
-                meta.sine_hires_ratio = 3
+            # if config.has_option('Scanning', 'Sine_Pause_Frame_Index'):
+            meta.sine_frame_indices = list(map(int, config['Scanning']['Sine_Pause_Frame_Index'].split()))
+            meta.sine_hires_ratio = config.getint('Scanning', 'Sine_Pause_X_Rate_Reduction')
+            # else:
+            #     meta.sine_frame_indices = [236, 256, 286, 306, 336, 356, 386, 406, 434, 454]
+            #     meta.sine_hires_ratio = 3
 
         dialog = Unp_Preview_Widget()
         dialog.set_unp_path(Path(path), meta)
@@ -146,12 +143,19 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.dcSubtract = dialog.dcSubtractCheckBox.isChecked()
             meta.log_scale = dialog.logScaleCheckBox.isChecked()
             meta.max_projection = dialog.maxProjectionCheckBox.isChecked()
-            meta.c2 = dialog.dispC2SpinBox.value()
-            meta.c3 = dialog.dispC3SpinBox.value()
+            meta.c2A = dialog.dispC2ASpinBox.value()
+            meta.c3A = dialog.dispC3ASpinBox.value()
+            meta.c2B = dialog.dispC2BSpinBox.value()
+            meta.c3B = dialog.dispC3BSpinBox.value()
+            meta.split_dispersion = dialog.splitDispersionCheckBox.isChecked()
+            meta.dispersion_mode = dialog.dispersionModeComboBox.currentIndex()
             
             if dialog.OCTACheckBox.isChecked():
                 meta.octa = dialog.OCTAComboBox.currentText()
                 meta.structure = dialog.structureCheckBox.isChecked()
+            
+            meta.windowType = dialog.windowComboBox.currentIndex()
+            meta.split_spectrum = dialog.splitSpectrumCheckBox.isChecked()
 
             print("File Info")
             print(f"width: {meta.width}")
@@ -168,9 +172,15 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"dcSubtract: {meta.dcSubtract}")
             print(f"log_scale: {meta.log_scale}")
             print(f"max_projection: {meta.max_projection}")
-            print(f"c2: {meta.c2}")
-            print(f"c3: {meta.c3}")
+            print(f"c2A: {meta.c2A}")
+            print(f"c3A: {meta.c3A}")
+            print(f"c2B: {meta.c2B}")
+            print(f"c3B: {meta.c3B}")
+            print(f"split_dispersion: {meta.split_dispersion}")
             print(f"octa: {meta.octa}")
+            print(f"windowType: {meta.windowType}")
+            print(f"split_spectrum: {meta.split_spectrum}")
+
             return meta
         else:
             return None
@@ -201,14 +211,21 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.dcSubtract = dialog.dcSubtractCheckBox.isChecked()
             meta.log_scale = dialog.logScaleCheckBox.isChecked()
             meta.max_projection = dialog.maxProjectionCheckBox.isChecked()
-            meta.c2 = dialog.dispC2SpinBox.value()
-            meta.c3 = dialog.dispC3SpinBox.value()
+            meta.c2A = dialog.dispC2ASpinBox.value()
+            meta.c3A = dialog.dispC3ASpinBox.value()
+            meta.c2B = dialog.dispC2BSpinBox.value()
+            meta.c3B = dialog.dispC3BSpinBox.value()
+            meta.split_dispersion = dialog.splitDispersionCheckBox.isChecked()
+            meta.dispersion_mode = dialog.dispersionModeComboBox.currentIndex()
             #packed is always false for xml only case
             meta.packed = False
 
             if dialog.OCTACheckBox.isChecked():
                 meta.octa = dialog.OCTAComboBox.currentText()
                 meta.structure = dialog.structureCheckBox.isChecked()
+            
+            meta.windowType = dialog.windowComboBox.currentIndex()
+            meta.split_spectrum = dialog.splitSpectrumCheckBox.isChecked()
 
             print("File Info")
             print(f"width: {meta.width}")
@@ -225,9 +242,14 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"dcSubtract: {meta.dcSubtract}")
             print(f"log_scale: {meta.log_scale}")
             print(f"max_projection: {meta.max_projection}")
-            print(f"c2: {meta.c2}")
-            print(f"c3: {meta.c3}")
+            print(f"c2A: {meta.c2A}")
+            print(f"c3A: {meta.c3A}")
+            print(f"c2B: {meta.c2B}")
+            print(f"c3B: {meta.c3B}")
+            print(f"split_dispersion: {meta.split_dispersion}")
             print(f"octa: {meta.octa}")
+            print(f"windowType: {meta.windowType}")
+            print(f"split_spectrum: {meta.split_spectrum}")
 
             return meta
 

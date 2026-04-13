@@ -3,6 +3,135 @@ import torch
 import math
 import torch.nn.functional as F
 from napari_cool_tools_oct_preproc import Operation
+from napari.utils.notifications import show_info, show_error
+
+def auto_contrast_split_quad(
+    img: torch.Tensor,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    lower_percentileC: float = 1.0,
+    upper_percentileC: float = 99.0,
+    lower_percentileD: float = 1.0,
+    upper_percentileD: float = 99.0,
+    num_averages: int = 1,
+) -> torch.Tensor:
+    
+    n = num_averages
+
+    if n == 0:
+        n = 1
+    
+    if img.ndim == 3:
+        center = img.shape[0] // 2
+
+        half = n // 2
+        if n % 2 == 1:  # odd
+            temp_frame = img[center-half : center+half+1]
+        else:           # even
+            temp_frame = img[center-half : center+half]
+
+        temp_frame = torch.mean(temp_frame, dim=0)
+
+        mmax = temp_frame.max()
+
+        temp_frameA = temp_frame[0::4,:]
+        # vmin1, vmax1 = np.percentile(temp_frameA, (lower_percentileA, upper_percentileA))
+        qs = torch.tensor([lower_percentileA, upper_percentileA], dtype=torch.float32, device=temp_frameA.device) / 100.0
+        vmin1, vmax1 = torch.quantile(temp_frameA, qs)
+
+        dataA = img.data[:,0::4,:]
+        dataA = dataA - vmin1
+        dataA = dataA / (vmax1 - vmin1) #normalize to 0-1
+        img.data[:,0::4,:] = dataA * mmax
+
+        temp_frameB = temp_frame[1::4,:]
+        # vmin2, vmax2 = np.percentile(temp_frameB, (lower_percentileB, upper_percentileB))
+        qs = torch.tensor([lower_percentileB, upper_percentileB], dtype=torch.float32, device=temp_frameB.device) / 100.0
+        vmin2, vmax2 = torch.quantile(temp_frameB, qs)
+
+        dataB = img.data[:,1::4,:]
+        dataB = dataB - vmin2
+        dataB = dataB / (vmax2 - vmin2) #normalize to 0-1
+        img.data[:,1::4,:] = dataB * mmax
+
+        temp_frameC = temp_frame[2::4,:]
+        # vmin3, vmax3 = np.percentile(temp_frameC, (lower_percentileC, upper_percentileC))
+        qs = torch.tensor([lower_percentileC, upper_percentileC], dtype=torch.float32, device=temp_frameC.device) / 100.0
+        vmin3, vmax3 = torch.quantile(temp_frameC, qs)
+
+        dataC = img.data[:,2::4,:]
+        dataC = dataC - vmin3
+        dataC = dataC / (vmax3 - vmin3) #normalize to 0-1
+        img.data[:,2::4,:] = dataC * mmax
+
+        temp_frameD = temp_frame[3::4,:]
+        # vmin4, vmax4 = np.percentile(temp_frameD, (lower_percentileD, upper_percentileD))
+        qs = torch.tensor([lower_percentileD, upper_percentileD], dtype=torch.float32, device=temp_frameD.device) / 100.0
+        vmin4, vmax4 = torch.quantile(temp_frameD, qs)
+
+        dataD = img.data[:,3::4,:]
+        dataD = dataD - vmin4
+        dataD = dataD / (vmax4 - vmin4) #normalize to 0-1
+        img.data[:,3::4,:] = dataD * mmax
+
+    else:
+        show_error("Input image must be 2D or 3D.")
+
+    return img
+
+def auto_contrast_split(
+    img: torch.Tensor,
+    lower_percentileA: float = 1.0,
+    upper_percentileA: float = 99.0,
+    lower_percentileB: float = 1.0,
+    upper_percentileB: float = 99.0,
+    num_averages: int = 1,
+) -> torch.Tensor:
+    
+    n = num_averages
+
+    if n == 0:
+        n = 1
+    
+    if img.ndim == 3:
+        center = img.shape[0] // 2
+
+        half = n // 2
+        if n % 2 == 1:  # odd
+            temp_frame = img[center-half : center+half+1]
+        else:           # even
+            temp_frame = img[center-half : center+half]
+
+        temp_frame = torch.mean(temp_frame, dim=0)
+
+        mmax = temp_frame.max()
+
+        temp_frameA = temp_frame[0::2,:]
+        # vmin1, vmax1 = np.percentile(temp_frameA, (lower_percentileA, upper_percentileA))
+        qs = torch.tensor([lower_percentileA, upper_percentileA], dtype=torch.float32, device=temp_frameA.device) / 100.0
+        vmin1, vmax1 = torch.quantile(temp_frameA, qs)
+
+        dataA = img.data[:,0::2,:]
+        dataA = dataA - vmin1
+        dataA = dataA / (vmax1 - vmin1) #normalize to 0-1
+        img.data[:,0::2,:] = dataA * mmax
+
+        temp_frameB = temp_frame[1::2,:]
+        # vmin2, vmax2 = np.percentile(temp_frameB, (lower_percentileB, upper_percentileB))
+        qs = torch.tensor([lower_percentileB, upper_percentileB], dtype=torch.float32, device=temp_frameB.device) / 100.0
+        vmin2, vmax2 = torch.quantile(temp_frameB, qs)
+
+        dataB = img.data[:,1::2,:]
+        dataB = dataB - vmin2
+        dataB = dataB / (vmax2 - vmin2) #normalize to 0-1
+        img.data[:,1::2,:] = dataB * mmax
+
+    else:
+        show_error("Input image must be 2D or 3D.")
+
+    return img
 
 def auto_contrast(
     img: Image,
