@@ -14,6 +14,8 @@ from napari.types import ImageData
 from napari_cool_tools_io import device, torch
 from tqdm import tqdm
 
+from napari_cool_tools_img_proc import DType
+from napari_cool_tools_img_proc._normalization_funcs import convert_dtype_and_rescale
 from napari_cool_tools_segmentation import (
     BscanSegmentationType,
     EnfaceSegmentationType,
@@ -31,6 +33,7 @@ def bscan_onnx_seg_func(
     use_cpu: bool = True,
     output_preproc: bool = False,
     old_preproc: bool = False,
+    verbose: bool = True,
     debug: bool = False,
 ):
     """"""
@@ -47,20 +50,31 @@ def bscan_onnx_seg_func(
     from torchvision.transforms.functional import InterpolationMode
     from torchvision.transforms.v2.functional import resize
 
+    if img.dtype.type not in (np.float16,np.float32):
+        raise ValueError(f"Image dtype ({img.dtype}) is not np.float16 or np.float32 which is required for this function.\n")
+    else:
+        if img.dtype.type == np.float16:
+            if verbose:
+                print("Converting image from np.float16 to np.float32 for segmentation.\n")
+            img=convert_dtype_and_rescale(img,datatype=DType.NP_FLOAT32)
+
     #target_shape = (992, 800)
     init_shape = (img.shape[-2], img.shape[-1])
 
     if use_cpu:
         processor = "cpu"
         onnx_dev = "cpu"
-        print(f"Using device {platform.processor()}")
+        if verbose:
+            print(f"Using device {platform.processor()}")
     else:
         processor = device
         onnx_dev = "cuda"
         device_id = torch.cuda.current_device()
-        print(f"Using device {torch.cuda.get_device_name(device_id)}\n")
+        if verbose:
+            print(f"Using device {torch.cuda.get_device_name(device_id)}\n")
 
-    print(f"Onnx file_path: {onnx_path}\n")
+    if verbose:
+        print(f"Onnx file_path: {onnx_path}\n")
 
     num_bscans = len(img)
     rem = num_bscans % batch_size
@@ -72,7 +86,8 @@ def bscan_onnx_seg_func(
 
     onnx_folder_path = Path(onnx_path).parents[0]
 
-    print(f"onnx_folder_path: {onnx_folder_path}\n")
+    if verbose:
+        print(f"onnx_folder_path: {onnx_folder_path}\n")
 
     pttm_params = {
         "h": target_shape[-2],  # 992 #256 512, 992, 864, 800,
@@ -250,7 +265,8 @@ def bscan_onnx_seg_func(
         label_preds.append(labels)
 
     gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
-    print(f"GPU memory is clear: {gpu_mem_clear}\n")
+    if verbose:
+        print(f"GPU memory is clear: {gpu_mem_clear}\n")
 
     del (
         pred_ds,
@@ -267,9 +283,10 @@ def bscan_onnx_seg_func(
 
     gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
 
-    print(f"GPU memory is clear: {gpu_mem_clear}\n")
-    if not gpu_mem_clear:
-        print(f"{torch.cuda.memory_summary()}\n")
+    if verbose:
+        print(f"GPU memory is clear: {gpu_mem_clear}\n")
+        if not gpu_mem_clear:
+            print(f"{torch.cuda.memory_summary()}\n")
 
     preproc_bscans = np.concatenate(
         preproc_bscans, axis=0
@@ -475,6 +492,7 @@ def bscan_onnx_deconj_func(
     num_workers: int = 0,
     gpu_limit: int = 6,
     use_cpu: bool = False,
+    verbose: bool = True,
     debug: bool = False,
 ) -> tuple[ImageData, str]:
     """"""
@@ -505,14 +523,16 @@ def bscan_onnx_deconj_func(
     if use_cpu:
         processor = "cpu"
         onnx_dev = "cpu"
-        print(f"Using device {platform.processor()}")
+        if verbose:
+            print(f"Using device {platform.processor()}")
     else:
         processor = device
         onnx_dev = "cuda"
         device_id = torch.cuda.current_device()
-        print(f"Using device {torch.cuda.get_device_name(device_id)}\n")
-
-    print(f"Onnx file_path: {onnx_path}\n")
+        if verbose:
+            print(f"Using device {torch.cuda.get_device_name(device_id)}\n")
+    if verbose:
+        print(f"Onnx file_path: {onnx_path}\n")
 
     num_bscans = len(data)
     rem = num_bscans % batch_size
@@ -524,7 +544,8 @@ def bscan_onnx_deconj_func(
 
     onnx_folder_path = Path(onnx_path).parents[0]
 
-    print(f"onnx_folder_path: {onnx_folder_path}\n")
+    if verbose:
+        print(f"onnx_folder_path: {onnx_folder_path}\n")
 
     pttm_params = {
         "h": target_shape[-2],
@@ -651,7 +672,8 @@ def bscan_onnx_deconj_func(
         preds.append(pred_tensor)
 
     gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
-    print(f"GPU memory is clear: {gpu_mem_clear}\n")
+    if verbose:
+        print(f"GPU memory is clear: {gpu_mem_clear}\n")
 
     del (
         pred_ds,
@@ -663,9 +685,10 @@ def bscan_onnx_deconj_func(
 
     gpu_mem_clear = torch.cuda.memory_allocated() == torch.cuda.memory_reserved() == 0
 
-    print(f"GPU memory is clear: {gpu_mem_clear}\n")
-    if not gpu_mem_clear:
-        print(f"{torch.cuda.memory_summary()}\n")
+    if verbose:
+        print(f"GPU memory is clear: {gpu_mem_clear}\n")
+        if not gpu_mem_clear:
+            print(f"{torch.cuda.memory_summary()}\n")
 
     preds = np.concatenate(preds, axis=0)
     preds_out = preds[:num_bscans]

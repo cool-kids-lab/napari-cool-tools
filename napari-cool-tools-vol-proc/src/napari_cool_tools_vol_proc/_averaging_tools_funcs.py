@@ -47,7 +47,8 @@ def average_bscans_torch(vol: ImageData, scans_per_avg: int = 3) -> ImageData:
     if scans_per_avg <= 0:
         raise ValueError("scans_per_avg must be a positive integer")
 
-    vol_t = torch.as_tensor(vol.copy()).to(device)
+    #vol_t = torch.as_tensor(vol.copy()).to(device)
+    vol_t = torch.as_tensor(vol).to(device)
     z, y, x = vol_t.shape
 
     if z % scans_per_avg != 0:

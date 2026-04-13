@@ -14,9 +14,15 @@ contributions:
     - id: napari-cool-tools-io.npy_get_reader
       python_name: napari_cool_tools_io._npy_reader:npy_get_reader
       title: Open .npy files
+    - id: napari-cool-tools-io.npz_get_reader
+      python_name: napari_cool_tools_io._npz_reader:npz_get_reader
+      title: Open .npz files
     - id: napari-cool-tools-io.npy_get_writer
       title: Save .npy files
       python_name: napari_cool_tools_io._npy_writer:npy_get_writer
+    - id: napari-cool-tools-io.npz_get_writer
+      title: Save .npz files
+      python_name: napari_cool_tools_io._npz_writer:npz_get_writer
     # - id: napari-cool-tools-io.convert_unp_prof
     #   title: Convert unp to prof
     #   python_name: napari_cool_tools_io._import_unp:convert_unp_prof
@@ -33,6 +39,10 @@ contributions:
       accepts_directories: false
       filename_patterns:
       - '*.npy'
+    - command: napari-cool-tools-io.npz_get_reader
+      accepts_directories: false
+      filename_patterns:
+      - '*.npz'
   writers:
     - command: napari-cool-tools-io.npy_get_writer
       layer_types:
@@ -42,6 +52,14 @@ contributions:
       filename_extensions:
       - .npy
       display_name: Numpy File
+    - command: napari-cool-tools-io.npz_get_writer
+      layer_types:
+      - image*
+      - labels*
+      - points*
+      filename_extensions:
+      - .npz
+      display_name: Cool Kids Lab Efficient Fromat
     - command: napari-cool-tools-io.write_data_prof
       layer_types:
       - image*
