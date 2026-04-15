@@ -9,6 +9,7 @@ version = "0.1.0"
 # We need a python version that is compatible with pytorch
 python = ">=3.9,<3.12"
 pip = ">=25.2,<26"
+imageio-ffmpeg = ">=0.6.0,<0.7"
 
 [pypi-dependencies]
 numpy = "==1.23.5"
@@ -26,7 +27,7 @@ napari-cool-tools-submenu-patch = { path = "napari-cool-tools-submenu-patch", ed
 napari-plugin-manager = "*"
 kornia = "==0.8.*"
 flatbuffers = "==25.2.*"
-packaging = "==24.*"
+packaging = "==26.*"
 protobuf = "==6.30.*"
 matplotlib = "==3.9.*"
 ruamel-yaml = "==0.18.6"
