@@ -22,8 +22,75 @@ from napari_cool_tools_segmentation._segmentation_funcs import (
     bscan_onnx_deconj_func,
     bscan_onnx_seg_func,
     enface_onnx_seg_func,
+    bscan_yolo_melanoma_seg_func,
 )
+@magic_factory()
+def bscan_yolo_melanoma_seg_plugin(
+    img: Image,
+    target_shape:list = [800,800], #(992,800)
+    batch_size: int = 32,
+    num_workers: int = 0,
+    use_cpu: bool = False,
+    output_preproc: bool = False,
+    old_preproc: bool = False,
+    debug: bool = False,
+):
+    """"""
+    bscan_yolo_melanoma_seg_thread(
+        img,
+        target_shape=target_shape,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        use_cpu=use_cpu,
+        output_preproc=output_preproc,
+        old_preproc=old_preproc,
+        debug=debug,
+    )
+    return
 
+def bscan_yolo_melanoma_seg_thread(
+    img: Image,
+    target_shape:list = [800,800], #(992,800)
+    batch_size: int = 32,
+    num_workers: int = 0,
+    use_cpu: bool = False,
+    output_preproc: bool = False,
+    old_preproc: bool = False,
+    debug: bool = False,
+):
+    """"""
+    show_info("YOLO B-scan melanoma segmentation thread has started\n")
+
+    #TODO function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
+    bscan_yolo_melanoma_seg_func()
+
+    # labels_name = f"{img.name}_B-scan_melanoma_labels"
+    # preproc_name = f"{img.name}_B-scan_melanoma_preproc"
+
+    # outputs = bscan_yolo_melanoma_seg_func(
+    #     img.data,
+    #     batch_size=batch_size,
+    #     target_shape=target_shape,
+    #     num_workers=num_workers,
+    #     use_cpu=use_cpu,
+    #     output_preproc=output_preproc,
+    #     old_preproc=old_preproc,
+    #     debug=debug,
+    # )
+
+    # for layer, layer_type in outputs:
+    #     add_kwargs = {}
+
+    #     if layer_type == "labels":
+    #         add_kwargs["name"] = labels_name
+
+    #     elif layer_type == "image":
+    #         add_kwargs["name"] = preproc_name
+
+    #     out_layer = Layer.create(layer, add_kwargs, layer_type)
+    #     yield (out_layer)
+
+    show_info("YOLO B-scan melanoma segmentation thread has completed\n")
 
 @magic_factory()
 def bscan_onnx_seg_plugin(

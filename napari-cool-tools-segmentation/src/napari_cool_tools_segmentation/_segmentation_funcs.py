@@ -22,6 +22,9 @@ from napari_cool_tools_segmentation import (
     Path,
 )  # onnx_bscan, onnx_enface_vessels, onnx_enface_ridge
 
+def bscan_yolo_melanoma_seg_func():
+    #TODO function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
+    pass
 
 def bscan_onnx_seg_func(
     img: ImageData,

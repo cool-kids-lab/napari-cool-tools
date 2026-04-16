@@ -38,6 +38,7 @@ class unp_meta:
     structure: bool = False
     windowType: int = 0
     split_spectrum: bool = False
+    motor_position: int | None = None
 
 def memory_stats():
     show_info(f"Gpu memory allocated: {torch.cuda.memory_allocated() / 1024**2}")

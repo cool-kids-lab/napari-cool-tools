@@ -14,6 +14,9 @@ contributions:
     - id: napari-cool-tools-segmentation.popcorn_enface_seg
       title: Popcorn Enface Segmentation
       python_name: napari_cool_tools_segmentation._segmentation:enface_popcorn_seg_func
+    - id: napari-cool-tools-segmentation.yolo_bscan_melanoma_seg
+      title: YOLO B-scan Melanoma Segmentation
+      python_name: napari_cool_tools_segmentation._segmentation:bscan_yolo_melanoma_seg_plugin
   widgets:
     - command: napari-cool-tools-segmentation.onnx_bscan_seg
       display_name: ONNX B-scan Segmentation
@@ -26,4 +29,7 @@ contributions:
       autogenerate: false
     - command: napari-cool-tools-segmentation.popcorn_enface_seg
       display_name: Popcorn Enface Segmentation
+      autogenerate: false
+    - command: napari-cool-tools-segmentation.yolo_bscan_melanoma_seg
+      display_name: YOLO B-scan Melanoma Segmentation
       autogenerate: false
