@@ -26,7 +26,7 @@ import onnxruntime as ort
 import torch.nn.functional as F
 
 def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [800,800], vmin = 0.3, vmax = 2.0,
-                                 CONF_THRESH = 0.45, IOU_THRESH = 0.05) -> np.ndarray:
+                                 CONF_THRESH = 0.45, IOU_THRESH = 0.05, MIN_CONSECUTIVE_FRAMES = 30) -> np.ndarray:
     #TODO function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
     def build_session(model_path: str) -> ort.InferenceSession:
         """Create an ONNX Runtime session. Prefer CUDA, fallback to CPU."""
@@ -88,7 +88,7 @@ def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [80
 
         #stack up image to 3 channels using numpy
         img = np.stack([img] * 3, axis=-1)
-        print(f"Preprocessed image shape: {img.shape}")
+        # print(f"Preprocessed image shape: {img.shape}")
 
         img = np.transpose(img, (2, 0, 1))
         img = np.expand_dims(img, axis=0)
@@ -335,7 +335,7 @@ def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [80
         )
 
     # 5) Continuity filtering
-    MIN_CONSECUTIVE_FRAMES = 30
+    # MIN_CONSECUTIVE_FRAMES = 30
     KEEP_ONLY_LONGEST_RUN  = False
 
     kept_records = filter_continuous_records(

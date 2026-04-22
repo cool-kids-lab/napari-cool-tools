@@ -35,6 +35,7 @@ def bscan_yolo_melanoma_seg_plugin(
     vmax = 2.0,
     CONF_THRESH = 0.45,
     IOU_THRESH = 0.05,
+    MIN_CONSECUTIVE_FRAMES = 30,
 ):
     """"""
     bscan_yolo_melanoma_seg_thread(
@@ -44,6 +45,7 @@ def bscan_yolo_melanoma_seg_plugin(
         vmax=vmax,
         CONF_THRESH=CONF_THRESH,
         IOU_THRESH=IOU_THRESH,
+        MIN_CONSECUTIVE_FRAMES=MIN_CONSECUTIVE_FRAMES,
     )
     return
 
@@ -55,9 +57,10 @@ def bscan_yolo_melanoma_seg_thread(
     vmax = 2.0,
     CONF_THRESH = 0.45,
     IOU_THRESH = 0.05,
+    MIN_CONSECUTIVE_FRAMES = 30,
 ):
     """"""
-    show_info("YOLO B-scan melanoma segmentation thread has started\n")
+    print("YOLO B-scan melanoma segmentation thread has started\n")
 
     #function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
     data = bscan_yolo_melanoma_seg_func(
@@ -67,7 +70,7 @@ def bscan_yolo_melanoma_seg_thread(
         vmax=vmax,
         CONF_THRESH=CONF_THRESH,
         IOU_THRESH=IOU_THRESH,
-
+        MIN_CONSECUTIVE_FRAMES=MIN_CONSECUTIVE_FRAMES
     )
 
     add_kwargs = {}
@@ -81,8 +84,7 @@ def bscan_yolo_melanoma_seg_thread(
     #1) threshold the image to create a binary mask of the melanoma regions
     #2) use connected components to label the individual melanoma regions
 
-
-    show_info("YOLO B-scan melanoma segmentation thread has completed\n")
+    print("YOLO B-scan melanoma segmentation thread has completed\n")
 
 @magic_factory()
 def bscan_onnx_seg_plugin(
