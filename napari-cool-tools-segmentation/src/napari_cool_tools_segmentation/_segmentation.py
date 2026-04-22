@@ -24,71 +24,63 @@ from napari_cool_tools_segmentation._segmentation_funcs import (
     enface_onnx_seg_func,
     bscan_yolo_melanoma_seg_func,
 )
+
+import numpy as np
+
 @magic_factory()
 def bscan_yolo_melanoma_seg_plugin(
     img: Image,
     target_shape:list = [800,800], #(992,800)
-    batch_size: int = 32,
-    num_workers: int = 0,
-    use_cpu: bool = False,
-    output_preproc: bool = False,
-    old_preproc: bool = False,
-    debug: bool = False,
+    vmin = 0.3,
+    vmax = 2.0,
+    CONF_THRESH = 0.45,
+    IOU_THRESH = 0.05,
 ):
     """"""
     bscan_yolo_melanoma_seg_thread(
         img,
         target_shape=target_shape,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        use_cpu=use_cpu,
-        output_preproc=output_preproc,
-        old_preproc=old_preproc,
-        debug=debug,
+        vmin=vmin,
+        vmax=vmax,
+        CONF_THRESH=CONF_THRESH,
+        IOU_THRESH=IOU_THRESH,
     )
     return
 
+@thread_worker(connect={"yielded": viewer.add_layer})
 def bscan_yolo_melanoma_seg_thread(
     img: Image,
     target_shape:list = [800,800], #(992,800)
-    batch_size: int = 32,
-    num_workers: int = 0,
-    use_cpu: bool = False,
-    output_preproc: bool = False,
-    old_preproc: bool = False,
-    debug: bool = False,
+    vmin = 0.3,
+    vmax = 2.0,
+    CONF_THRESH = 0.45,
+    IOU_THRESH = 0.05,
 ):
     """"""
     show_info("YOLO B-scan melanoma segmentation thread has started\n")
 
-    #TODO function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
-    bscan_yolo_melanoma_seg_func()
+    #function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
+    data = bscan_yolo_melanoma_seg_func(
+        img.data,
+        target_shape=target_shape,
+        vmin=vmin,
+        vmax=vmax,
+        CONF_THRESH=CONF_THRESH,
+        IOU_THRESH=IOU_THRESH,
 
-    # labels_name = f"{img.name}_B-scan_melanoma_labels"
-    # preproc_name = f"{img.name}_B-scan_melanoma_preproc"
+    )
 
-    # outputs = bscan_yolo_melanoma_seg_func(
-    #     img.data,
-    #     batch_size=batch_size,
-    #     target_shape=target_shape,
-    #     num_workers=num_workers,
-    #     use_cpu=use_cpu,
-    #     output_preproc=output_preproc,
-    #     old_preproc=old_preproc,
-    #     debug=debug,
-    # )
+    add_kwargs = {}
+    add_kwargs["name"] = f"{img.name}_melanoma_labels"
 
-    # for layer, layer_type in outputs:
-    #     add_kwargs = {}
+    out_layer = Layer.create(data, add_kwargs, "labels")
+    yield (out_layer)
 
-    #     if layer_type == "labels":
-    #         add_kwargs["name"] = labels_name
 
-    #     elif layer_type == "image":
-    #         add_kwargs["name"] = preproc_name
+    #TODO add function to isolate the labels from the image
+    #1) threshold the image to create a binary mask of the melanoma regions
+    #2) use connected components to label the individual melanoma regions
 
-    #     out_layer = Layer.create(layer, add_kwargs, layer_type)
-    #     yield (out_layer)
 
     show_info("YOLO B-scan melanoma segmentation thread has completed\n")
 

@@ -16,6 +16,7 @@ onnx_folder_parent_path = this_file_path.parents[3]
 onnx_bscan_path = onnx_folder_parent_path / "onnx_models/bscan/"
 onnx_bscan_retina_seg_path = onnx_bscan_path / "retina"
 onnx_bscan_deconjugate_path = onnx_bscan_path / "deconjugate"
+onnx_bscan_melanoma_seg_path = onnx_bscan_path / "melanoma"
 
 onnx_enface_path = onnx_folder_parent_path / "onnx_models/enface"
 onnx_enface_vessels_path = onnx_enface_path / "vessels"
@@ -33,7 +34,6 @@ onnx_enface_ridge = list(onnx_enface_ridge_path.rglob("*.onnx"))[0]
 class BscanSegmentationType(Enum):
     RETINASEG = onnx_bscan_retina_seg
     DECONJUGATE = onnx_bscan_deconjugate
-
 
 class EnfaceSegmentationType(Enum):
     VESSEL = onnx_enface_vessels

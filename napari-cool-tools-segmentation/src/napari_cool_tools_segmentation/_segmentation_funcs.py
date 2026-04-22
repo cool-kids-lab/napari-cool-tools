@@ -4,13 +4,13 @@ This module contains function code for segmenting images
 
 import gc
 import platform
-
-# from pathlib import Path
-from typing import List, Tuple
+from scipy.ndimage import uniform_filter
+import cv2
+from typing import Dict, List, Tuple
 
 import numpy as np
 from napari.layers import Layer
-from napari.types import ImageData
+from napari.types import ImageData, Optional
 from napari_cool_tools_io import device, torch
 from tqdm import tqdm
 
@@ -20,11 +20,342 @@ from napari_cool_tools_segmentation import (
     BscanSegmentationType,
     EnfaceSegmentationType,
     Path,
+    onnx_bscan_melanoma_seg_path,
 )  # onnx_bscan, onnx_enface_vessels, onnx_enface_ridge
+import onnxruntime as ort
 
-def bscan_yolo_melanoma_seg_func():
+def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [800,800], vmin = 0.3, vmax = 2.0,
+                                 CONF_THRESH = 0.45, IOU_THRESH = 0.05) -> np.ndarray:
     #TODO function to infere yolo bscan melanoma segmentation model and return labels in same format as bscan_onnx_seg_func for consistency across models and ease of use in napari plugin.
-    pass
+    def build_session(model_path: str) -> ort.InferenceSession:
+        """Create an ONNX Runtime session. Prefer CUDA, fallback to CPU."""
+        available = ort.get_available_providers()
+        print(f"[INFO] Available ORT providers: {available}")
+
+        if "CUDAExecutionProvider" in available:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                sess = ort.InferenceSession(
+                    model_path,
+                    providers=[
+                        ("CUDAExecutionProvider", {"device_id": 0}),
+                        "CPUExecutionProvider",
+                    ],
+                )
+            active = sess.get_providers()
+            if "CUDAExecutionProvider" in active:
+                print("[INFO] Running on GPU (CUDAExecutionProvider)")
+            else:
+                print(
+                    "[WARN] CUDAExecutionProvider listed but failed to initialise. "
+                    "Falling back to CPU."
+                )
+        else:
+            print("[WARN] CUDA not available using CPU")
+            sess = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+
+        print(f"[INFO] Active providers: {sess.get_providers()}")
+        return sess
+
+
+    def inspect_model(sess: ort.InferenceSession) -> Tuple[str, Tuple]:
+        """Print model I/O details and return (input_name, input_shape)."""
+        print("\n--- Model Inputs ---")
+        for inp in sess.get_inputs():
+            print(f"  name={inp.name!r}  shape={inp.shape}  dtype={inp.type}")
+
+        print("--- Model Outputs ---")
+        for out in sess.get_outputs():
+            print(f"  name={out.name!r}  shape={out.shape}  dtype={out.type}")
+        print()
+
+        inp0 = sess.get_inputs()[0]
+        return inp0.name, tuple(inp0.shape)
+
+
+    
+    def preprocess(image_bgr: np.ndarray, input_size: int) -> np.ndarray:
+        """
+        Resize -> BGR->RGB -> normalize [0,1] -> HWC->CHW -> add batch dim.
+        Output shape: (1, 3, H, W)
+        """
+
+        #resize image using 
+        img = cv2.resize(image_bgr, (input_size, input_size))
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = img.astype(np.float32) / 255.0
+        img = np.transpose(img, (2, 0, 1))
+        img = np.expand_dims(img, axis=0)
+        return np.ascontiguousarray(img)
+
+
+    def postprocess(
+        raw: np.ndarray,
+        orig_h: int,
+        orig_w: int,
+        input_size: int,
+        conf_thresh: float,
+        iou_thresh: float,
+        class_names: List[str],
+    ) -> List[Dict]:
+        """
+        Decode Ultralytics YOLO11 ONNX detection output.
+
+        Expected shape:
+        (1, 4 + nc, N)  or  (1, N, 4 + nc)
+
+        Returns a list of dicts with:
+        box=(x1,y1,x2,y2), conf, class_id, label
+        """
+        pred = raw[0]
+
+        # If shape is (N, 4+nc), transpose to (4+nc, N)
+        if pred.shape[0] >= pred.shape[1]:
+            pred = pred.T
+
+        nc = pred.shape[0] - 4
+        actual_nc = max(nc, 1)
+
+        boxes_raw = pred[:4, :]
+        scores_raw = pred[4:4 + actual_nc, :]
+
+        class_ids = np.argmax(scores_raw, axis=0)
+        confidences = scores_raw[class_ids, np.arange(scores_raw.shape[1])]
+
+        mask = confidences >= conf_thresh
+        if not mask.any():
+            return []
+
+        boxes_raw = boxes_raw[:, mask]
+        confidences = confidences[mask]
+        class_ids = class_ids[mask]
+
+        cx, cy, w, h = boxes_raw
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        scale_x = orig_w / input_size
+        scale_y = orig_h / input_size
+
+        x1 = (x1 * scale_x).astype(np.float32)
+        y1 = (y1 * scale_y).astype(np.float32)
+        x2 = (x2 * scale_x).astype(np.float32)
+        y2 = (y2 * scale_y).astype(np.float32)
+
+        x1 = np.clip(x1, 0, max(orig_w - 1, 0))
+        y1 = np.clip(y1, 0, max(orig_h - 1, 0))
+        x2 = np.clip(x2, 0, max(orig_w - 1, 0))
+        y2 = np.clip(y2, 0, max(orig_h - 1, 0))
+
+        detections = []
+        unique_classes = np.unique(class_ids)
+
+        for cls in unique_classes:
+            cls_mask = class_ids == cls
+            cls_boxes = np.stack(
+                [x1[cls_mask], y1[cls_mask], x2[cls_mask], y2[cls_mask]],
+                axis=1
+            )
+            cls_confs = confidences[cls_mask]
+
+            nms_boxes = [
+                [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])]
+                for b in cls_boxes
+            ]
+
+            indices = cv2.dnn.NMSBoxes(
+                nms_boxes,
+                cls_confs.tolist(),
+                conf_thresh,
+                iou_thresh
+            )
+
+            if indices is None or len(indices) == 0:
+                continue
+
+            indices = np.array(indices).reshape(-1)
+            label = class_names[cls] if cls < len(class_names) else f"class_{cls}"
+
+            cls_x1 = x1[cls_mask]
+            cls_y1 = y1[cls_mask]
+            cls_x2 = x2[cls_mask]
+            cls_y2 = y2[cls_mask]
+
+            for i in indices:
+                detections.append({
+                    "box": (
+                        float(cls_x1[i]),
+                        float(cls_y1[i]),
+                        float(cls_x2[i]),
+                        float(cls_y2[i]),
+                    ),
+                    "conf": float(cls_confs[i]),
+                    "class_id": int(cls),
+                    "label": label,
+                })
+
+        detections.sort(key=lambda d: d["conf"], reverse=True)
+        return detections
+    
+    def select_best_detection(detections: List[Dict]) -> Optional[Dict]:
+        """Keep only the highest-confidence detection for each frame."""
+        if not detections:
+            return None
+        return max(detections, key=lambda d: d["conf"])
+
+    def filter_continuous_records(
+        candidate_records: List[Dict],
+        min_consecutive_frames: int = 3,
+        keep_only_longest_run: bool = True,
+    ) -> List[Dict]:
+        """
+        Keep only records in continuous frame runs.
+
+        Rules:
+        - Frames with no detection are absent from candidate_records already
+        - Non-continuous runs are removed
+        - By default, keep only the LONGEST continuous run
+        - Runs shorter than min_consecutive_frames are removed
+        """
+        if not candidate_records:
+            return []
+
+        runs = split_into_consecutive_runs(candidate_records)
+        valid_runs = [run for run in runs if len(run) >= min_consecutive_frames]
+
+        if not valid_runs:
+            return []
+
+        if keep_only_longest_run:
+            best_run = max(
+                valid_runs,
+                key=lambda run: (len(run), float(np.mean([x["conf"] for x in run])))
+            )
+            return sorted(best_run, key=lambda r: r["frame_num"])
+
+        kept = []
+        for run in valid_runs:
+            kept.extend(run)
+        kept.sort(key=lambda r: r["frame_num"])
+        return kept
+    
+
+    def split_into_consecutive_runs(records: List[Dict]) -> List[List[Dict]]:
+        """
+        Split records into runs where frame numbers are strictly consecutive:
+        ..., 90, 91, 92, ...
+        """
+        if not records:
+            return []
+
+        records = sorted(records, key=lambda r: r["frame_num"])
+        runs = [[records[0]]]
+
+        for r in records[1:]:
+            prev = runs[-1][-1]
+            if r["frame_num"] == prev["frame_num"] + 1:
+                runs[-1].append(r)
+            else:
+                runs.append([r])
+
+        return runs
+
+    ###Main Script###
+
+    # 1) load the yolo onnx file
+    onnx_yolo_model_file = onnx_bscan_melanoma_seg_path / "best_cancer.onnx"
+
+    sess = build_session(str(onnx_yolo_model_file))
+    input_name, _ = inspect_model(sess)
+
+    # 2) Warm-up
+    warm_blob = np.zeros((1, 3, target_shape[0], target_shape[1]), dtype=np.float32)
+    _ = sess.run(None, {input_name: warm_blob})
+
+
+    # prepare input image
+    # img_volume = img_volume * 2500 / 65535.0
+
+    #use uniform filter to reduce noise
+    img_volume = uniform_filter(img_volume, size=(1, 3, 3))
+    # img_volume = averaged_data
+    # vmin = 0.3 // 12
+    # vmax = 2.0 // 36
+    img_volume = np.clip(img_volume, vmin, vmax)
+    img_volume = (img_volume - vmin) / (vmax - vmin)
+    # img_volume = (adjusted_slice)
+
+
+    # 4) Run inference over all images
+    candidate_records = []
+    orig_h, orig_w = img_volume.shape[1:]
+
+    CLASS_NAMES  = ["cancer"]
+
+    for idx, image in enumerate(img_volume):
+
+        blob = preprocess(image, target_shape[0])
+
+        outputs = sess.run(None, {input_name: blob})
+
+        detections = postprocess(
+            outputs[0],
+            orig_h,
+            orig_w,
+            target_shape[0],
+            CONF_THRESH,
+            IOU_THRESH,
+            CLASS_NAMES,
+        )
+
+        best_det = select_best_detection(detections)
+
+        if best_det is None:
+            print(
+                f"[{idx}/{len(img_volume)}] no detection"
+            )
+            continue
+
+        record = {
+            "frame_num": idx,
+            "orig_box": best_det["box"],
+        }
+        candidate_records.append(record)
+
+        print(
+            f"[{idx}/{len(img_volume)}] conf={best_det['conf']:.3f} "
+        )
+
+    # 5) Continuity filtering
+    MIN_CONSECUTIVE_FRAMES = 30
+    KEEP_ONLY_LONGEST_RUN  = False
+
+    kept_records = filter_continuous_records(
+        candidate_records,
+        min_consecutive_frames=MIN_CONSECUTIVE_FRAMES,
+        keep_only_longest_run=KEEP_ONLY_LONGEST_RUN,
+    )
+
+    # 6) visualizations
+    output_label = np.zeros_like(img_volume.data, dtype=int)#generate zero labels for now until function is implemented
+    for r in kept_records:
+        img = output_label[r["frame_num"]]
+
+        print(f"Frame {r['frame_num']}: box={r['orig_box']}")
+
+        x1, y1, x2, y2 = r["orig_box"] #this corrdinates is normalized to the input size
+        x1i, y1i, x2i, y2i = map(lambda v: int(round(v)), (x1, y1, x2, y2))
+
+        img[:,x1i:x2i] = 1
+
+        output_label[r["frame_num"]] = img
+
+    return output_label
+
 
 def bscan_onnx_seg_func(
     img: ImageData,

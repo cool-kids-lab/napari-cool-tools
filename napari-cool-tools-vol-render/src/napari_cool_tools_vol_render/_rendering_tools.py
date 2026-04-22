@@ -472,7 +472,7 @@ class PyVistaDock(QWidget):
         self.control_menu.setDisabled(True)
 
         self.animation_init_angle = self.plotter.camera.azimuth
-        self.plotter.camera.azimuth = self.control_menu.record_start_angle_spinner.value()
+        self.plotter.camera.azimuth = self.plotter.camera.azimuth - self.control_menu.record_start_angle_spinner.value()
         self.animation_direction = 1
         self.animation_step = 1
         fps = self.control_menu.record_rate_spinner.value()
@@ -524,7 +524,7 @@ class PyVistaDock(QWidget):
 
             #get initial camera azimuth angle to use as the starting point for the animation
             self.animation_init_angle = self.plotter.camera.azimuth
-            self.plotter.camera.azimuth = self.control_menu.record_start_angle_spinner.value()
+            self.plotter.camera.azimuth = self.plotter.camera.azimuth - self.control_menu.record_start_angle_spinner.value()
             self.animation_direction = 1
             self.animation_step = 1
             self.control_menu.record_end_angle_spinner.setDisabled(True)
