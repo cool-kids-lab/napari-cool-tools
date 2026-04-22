@@ -23,6 +23,7 @@ from napari_cool_tools_segmentation import (
     onnx_bscan_melanoma_seg_path,
 )  # onnx_bscan, onnx_enface_vessels, onnx_enface_ridge
 import onnxruntime as ort
+import torch.nn.functional as F
 
 def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [800,800], vmin = 0.3, vmax = 2.0,
                                  CONF_THRESH = 0.45, IOU_THRESH = 0.05) -> np.ndarray:
@@ -83,9 +84,12 @@ def bscan_yolo_melanoma_seg_func(img_volume: np.ndarray, target_shape:list = [80
 
         #resize image using 
         img = cv2.resize(image_bgr, (input_size, input_size))
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # img = img.astype(np.float32) / 255.0
+        img = img.astype(np.float32)
+
+        #stack up image to 3 channels using numpy
+        img = np.stack([img] * 3, axis=-1)
+        print(f"Preprocessed image shape: {img.shape}")
+
         img = np.transpose(img, (2, 0, 1))
         img = np.expand_dims(img, axis=0)
         return np.ascontiguousarray(img)
