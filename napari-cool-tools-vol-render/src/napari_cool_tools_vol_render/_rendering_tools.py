@@ -479,6 +479,13 @@ class PyVistaDock(QWidget):
 
         #open the file dialog to get the save path for the video
         video_name_path = self.get_save_video_path()
+
+        if video_name_path is None:
+            #if the user cancels the file dialog, re-enable the control menu and return
+            print("Video recording cancelled.")
+            self.control_menu.setDisabled(False)
+            return
+
         print(f"Saving video to: {video_name_path}")
 
         #open the video writer with the specified path and frame rate
