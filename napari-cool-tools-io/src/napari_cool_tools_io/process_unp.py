@@ -310,7 +310,7 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
     cost = torch.sum(entropy)
     return cost
 
-def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff: list, mode: int = 3) -> torch.Tensor:
+def comp_dis_phase_torch(data: torch.Tensor, max_disp_orders, arrCountDispCoeff: list, mode: int = 0) -> torch.Tensor:
     """
     Dispersion-phase compensation for complex OCT data using PyTorch.
     This function decomposes a complex-valued signal into amplitude and phase, adds a
