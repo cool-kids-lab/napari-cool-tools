@@ -6,7 +6,7 @@
   Implements a 2D curve correction approach for OCT B-scans using transformations from cylindrical or spherical coordinates. Includes a `Curve_Correction_Widget` (Qt-based) for napari integration that handles user input for pivot point, imaging range, scan angle, etc.
 
   __Parameters Note:__
-### Legacy OCT System
+### Legacy OCT System (Before January 2025)
 
 | Parameter | Legacy OCT System | Newer OCT System |
 |------------|---------|------------|
