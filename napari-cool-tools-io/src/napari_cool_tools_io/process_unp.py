@@ -770,7 +770,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
                 ref_data_size_bytes = data_size_bytes * hires_ratio
                 ref_hamming_window = hamming_hires
 
-            byte_reader.seek(int(data_size_bytes) * int(meta.depth/2), 0)
+            byte_reader.seek(int(data_size_bytes) * ref_frame, 0)
 
             if meta.packed:
                 raw_data = np.frombuffer(byte_reader.read(ref_data_size_bytes), dtype="<u1")
