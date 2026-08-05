@@ -152,13 +152,15 @@ def torch_like_numpy_median(x: torch.Tensor, dim=None, keepdim=False) -> torch.T
 
     return result
 
-def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
+def dc_subtraction_double_sweep_torch(data: torch.Tensor, dual_ascan: bool) -> torch.Tensor:
     """
     Remove the DC signal (DC subtraction) for double-sweep source signal.
     The number of A-scans per B-scan must be even, otherwise this function will raise an error.
+    If dual_ascan is True, the odd A-scans are flipped to align with the even ones.
 
     Args:
         data: Tensor of shape [numAscans, numPts], e.g. [800, 2016].
+        dual_ascan: Boolean flag indicating whether to flip the odd A-scans.
 
     Returns:
         subtracted_signal: Tensor of the same shape as input with DC component removed.
@@ -168,8 +170,11 @@ def dc_subtraction_double_sweep_torch(data: torch.Tensor) -> torch.Tensor:
 
     # Split into even (forward) and odd (reverse) A-scans
     corrected_1 = data[0::2, :] # every even A-scan
-    # corrected_2 = data[1::2, :] # every odd A-scan
-    corrected_2 = torch.flip(data[1::2, :], dims=[1]) # flip the odd A-scans to align with the even ones
+
+    if dual_ascan:
+        corrected_2 = torch.flip(data[1::2, :], dims=[1]) # flip the odd A-scans to align with the even ones
+    else:
+        corrected_2 = data[1::2, :] # every odd A-scan
 
     # Remove DC component by subtracting the median spectrum
     # Subtract median (DC removal) along each spectrum (per column)
@@ -542,7 +547,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
                     if meta.dcSubtract:
                     # Subtract the DC signal
-                        subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw,dual_ascan=meta.dual_ascan)
                     else:
                         subtracted_signal = raw
 
@@ -572,7 +577,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
                     if meta.dcSubtract:
                     # Subtract the DC signal
-                        subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw, dual_ascan=meta.dual_ascan)
                     else:
                         subtracted_signal = raw
 
@@ -611,7 +616,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
 
             if meta.dcSubtract:
             # Subtract the DC signal
-                subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                subtracted_signal = dc_subtraction_double_sweep_torch(raw, dual_ascan=meta.dual_ascan)
             else:
                 subtracted_signal = raw
 
@@ -691,7 +696,7 @@ def process_unp(unp_file_path:Path, meta: unp_meta, auto_dispersion:bool=False, 
     return oct_vol_array
 
 
-def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_lowres=True) -> tuple[np.ndarray, np.ndarray]:
+def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_lowres=True, auto_dispersion:bool=False, flip_coeffs:bool=False) -> tuple[np.ndarray, np.ndarray]:
 
     show_info("Starting unp file processing.")
 
@@ -743,6 +748,92 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
         #TODO this function does not include autodispersion yet. It should be added in the future, but for now we can just use the same coefficients as the low-res frames.
         #Will add this function in the future for batch processing
 
+        # auto dispersion (does not support split dispersion yet, only calculates c2 and c3 for the whole volume, global mode)
+        #this is for experimental only
+        if auto_dispersion:
+            # move to center frame in binary file
+            ref_frame = int(meta.depth/2)
+
+            def get_start(query) -> tuple[int, bool]:
+                for start, end in zip(indices[0::2], indices[1::2]):
+                    if start <= query < end:
+                        return start, True
+                    
+                return query, False
+                
+            ref_frame, is_in_pause = get_start(ref_frame)
+            ref_height = meta.height
+            ref_data_size_bytes = data_size_bytes
+            ref_hamming_window = hamming
+            if is_in_pause:
+                ref_height = hires_h
+                ref_data_size_bytes = data_size_bytes * hires_ratio
+                ref_hamming_window = hamming_hires
+
+            byte_reader.seek(int(data_size_bytes) * int(meta.depth/2), 0)
+
+            if meta.packed:
+                raw_data = np.frombuffer(byte_reader.read(ref_data_size_bytes), dtype="<u1")
+                if raw_data.size != ref_data_size_bytes:#this is correct, because it is still in 12bit (not unpacked yet)
+                    pass
+
+                else:
+                    raw_data = torch.tensor(raw_data).to(device)
+                    raw = unpack12_torch(raw_data)
+                    raw = raw.reshape((ref_height, meta.width))
+
+                    if meta.dcSubtract:
+                    # Subtract the DC signal
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw,dual_ascan=meta.dual_ascan)
+                    else:
+                        subtracted_signal = raw
+
+                    # Hamming windowing
+                    hamming_signal = subtracted_signal * ref_hamming_window
+
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100, dispersion_mode=meta.dispersion_mode)
+                    c2,c3 = dispersion_coeffs
+                    
+                    if flip_coeffs:
+                        if c2 < 0:
+                            c2 = c2 * -1
+                            c3 = c3 * -1
+                            
+                    meta.c2A = int(c2)
+                    meta.c3A = int(c3)
+
+
+            else:
+                raw_data = np.frombuffer(byte_reader.read(ref_data_size_bytes), dtype=np.uint16)
+                if raw_data.size != ref_height * meta.width:
+                    pass
+
+                else:
+                    raw = raw_data.reshape((ref_height, meta.width)).astype(np.float32)
+                    raw = torch.tensor(raw).to(device)
+
+                    if meta.dcSubtract:
+                    # Subtract the DC signal
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw, dual_ascan=meta.dual_ascan)
+                    else:
+                        subtracted_signal = raw
+
+                    # Hamming windowing
+                    hamming_signal = subtracted_signal * ref_hamming_window
+
+                    dispersion_coeffs = set_dispersion_coefficients_torch(hamming_signal, maxDispOrders=dispMaxOrder, coefRange=100, dispersion_mode=meta.dispersion_mode)
+                    c2,c3 = dispersion_coeffs
+                    
+                    if flip_coeffs:
+                        if c2 < 0:
+                            c2 = c2 * -1
+                            c3 = c3 * -1
+
+                    meta.c2A = int(c2)
+                    meta.c3A = int(c3)
+
+        ################
+
         frame_counter = 0
         frame_counter_lowres = 0
         frame_counter_hires = 0
@@ -770,7 +861,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
 
                     if meta.dcSubtract:
                     # Subtract the DC signal
-                        subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                        subtracted_signal = dc_subtraction_double_sweep_torch(raw, dual_ascan=meta.dual_ascan)
                     else:
                         subtracted_signal = raw
 
@@ -844,7 +935,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
 
                 if meta.dcSubtract:
                 # Subtract the DC signal
-                    subtracted_signal = dc_subtraction_double_sweep_torch(raw)
+                    subtracted_signal = dc_subtraction_double_sweep_torch(raw, dual_ascan=meta.dual_ascan)
                 else:
                     subtracted_signal = raw
 
