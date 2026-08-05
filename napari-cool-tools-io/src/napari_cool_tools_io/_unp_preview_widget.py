@@ -71,6 +71,7 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         self.dispersionModeComboBox.currentIndexChanged.connect(self.updateImage)
         self.windowComboBox.currentIndexChanged.connect(self.updateImage)
         self.splitSpectrumCheckBox.stateChanged.connect(self.updateImage)
+        self.dualAscanCheckBox.stateChanged.connect(self.updateImage)
 
         self.fullRangeCheckBox.stateChanged.connect(self.updateImage)
         self.desineCheckBox.stateChanged.connect(self.updateImage)
@@ -101,7 +102,7 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
 
             # Subtract the DC signal
             if self.dcSubtractCheckBox.isChecked():
-                subtracted_signal = dc_subtraction_double_sweep_torch(self.raw_data[idx])
+                subtracted_signal = dc_subtraction_double_sweep_torch(self.raw_data[idx], dual_ascan=self.dualAscanCheckBox.isChecked())
             else:
                 subtracted_signal = self.raw_data[idx]
 
@@ -246,7 +247,6 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         self.imageTotalFramesValue.setText(str(meta.depth))
         self.imageBMScanValue.setText(str(meta.bmscan))
 
-
         self.imageIndexing = np.arange(meta.depth)#start from 0
 
         if meta.bmscan > 1:
@@ -295,7 +295,7 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         for idx in range(0, self.frameAverageSpinBox.value()):
             # Subtract the DC signal
             if self.dcSubtractCheckBox.isChecked():
-                subtracted_signal = dc_subtraction_double_sweep_torch(self.raw_data[idx])
+                subtracted_signal = dc_subtraction_double_sweep_torch(self.raw_data[idx],dual_ascan=self.dualAscanCheckBox.isChecked())
             else:
                 subtracted_signal = self.raw_data[idx]
 

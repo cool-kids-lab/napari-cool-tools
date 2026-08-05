@@ -122,6 +122,7 @@ def unp_proc_meta(path) -> unp_meta | None:
         meta.double_side = config.getboolean('Scanning', 'Bidirectional')
         meta.pattern = config['Scanning']['Pattern']
         meta.delay = config.getint('Scanning', 'XDelay')
+        meta.dual_ascans = config.getboolean('Scanning', 'Bidirectional_A')
 
         if meta.pattern == "Sine_Pause":
 
@@ -136,6 +137,7 @@ def unp_proc_meta(path) -> unp_meta | None:
         dialog.set_unp_path(Path(path), meta)
 
         dialog.doubleSideCheckBox.setChecked(meta.double_side)
+        dialog.dualAscanCheckBox.setChecked(meta.dual_ascans)
 
         result = dialog.exec_()
 
@@ -159,6 +161,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             
             meta.windowType = dialog.windowComboBox.currentIndex()
             meta.split_spectrum = dialog.splitSpectrumCheckBox.isChecked()
+            meta.dual_ascan = dialog.dualAscanCheckBox.isChecked()
 
             print("File Info")
             print(f"width: {meta.width}")
@@ -233,6 +236,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             
             meta.windowType = dialog.windowComboBox.currentIndex()
             meta.split_spectrum = dialog.splitSpectrumCheckBox.isChecked()
+            meta.dual_ascan = dialog.dualAscanCheckBox.isChecked()
 
             print("File Info")
             print(f"width: {meta.width}")

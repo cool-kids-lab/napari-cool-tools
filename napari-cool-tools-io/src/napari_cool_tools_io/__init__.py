@@ -19,6 +19,7 @@ class unp_meta:
     vista: int = 0
     packed: bool = False
     double_side: bool = False
+    dual_ascan: bool = True
     pattern: str = "Sine"
     full_range: bool = False
     desine: bool = False
