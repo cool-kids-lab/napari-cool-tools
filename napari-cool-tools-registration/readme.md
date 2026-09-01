@@ -6,9 +6,8 @@
   Implements a 2D curve correction approach for OCT B-scans using transformations from cylindrical or spherical coordinates. Includes a `Curve_Correction_Widget` (Qt-based) for napari integration that handles user input for pivot point, imaging range, scan angle, etc.
 
   __Parameters Note:__
-### Legacy OCT System (Before January 2025)
 
-| Parameter | Legacy OCT System | Newer OCT System |
+| Parameter | Legacy OCT System (Before January 2025) | Newer OCT System |
 |------------|---------|------------|
 | Refractive Index | 1.33 | 1.33 |
 | Imaging Range in Air | 6 mm (1024 image size, 800 kHz) or 12 mm (2048 image size, 400 kHz) | 12 mm |
