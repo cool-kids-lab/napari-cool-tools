@@ -122,7 +122,7 @@ def unp_proc_meta(path) -> unp_meta | None:
         meta.double_side = config.getboolean('Scanning', 'Bidirectional')
         meta.pattern = config['Scanning']['Pattern']
         meta.delay = config.getint('Scanning', 'XDelay')
-        meta.dual_ascans = config.getboolean('Scanning', 'Bidirectional_A')
+        meta.dual_ascan = config.getboolean('Scanning', 'Bidirectional_A')
 
         if meta.pattern == "Sine_Pause":
 
@@ -137,7 +137,12 @@ def unp_proc_meta(path) -> unp_meta | None:
         dialog.set_unp_path(Path(path), meta)
 
         dialog.doubleSideCheckBox.setChecked(meta.double_side)
-        dialog.dualAscanCheckBox.setChecked(meta.dual_ascans)
+        dialog.dualAscanCheckBox.setChecked(meta.dual_ascan)
+
+        if meta.pattern == "Sine_Pause":
+            dialog.hiResInLoRescheckBox.setEnabled(True)
+            dialog.hiResInLoRescheckBox.setChecked(meta.include_hires)
+            dialog.hiResInLoRescheckBox.show()
 
         result = dialog.exec_()
 
@@ -154,6 +159,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             meta.c3B = dialog.dispC3BSpinBox.value()
             meta.split_dispersion = dialog.splitDispersionCheckBox.isChecked()
             meta.dispersion_mode = dialog.dispersionModeComboBox.currentIndex()
+            meta.include_hires = dialog.hiResInLoRescheckBox.isChecked()
             
             if dialog.OCTACheckBox.isChecked():
                 meta.octa = dialog.OCTAComboBox.currentText()
@@ -172,7 +178,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"vista: {meta.vista}")
             print(f"packed: {meta.packed}")
             print(f"double_side: {meta.double_side}")
-            print(f"dual_ascans: {meta.dual_ascan}")
+            print(f"dual_ascan: {meta.dual_ascan}")
             print(f"pattern: {meta.pattern}")
             print(f"delay: {meta.delay}")
             print(f"full_range: {meta.full_range}")
@@ -248,7 +254,7 @@ def unp_proc_meta(path) -> unp_meta | None:
             print(f"vista: {meta.vista}")
             print(f"packed: {meta.packed}")
             print(f"double_side: {meta.double_side}")
-            print(f"dual_ascans: {meta.dual_ascan}")
+            print(f"dual_ascan: {meta.dual_ascan}")
             print(f"pattern: {meta.pattern}")
             print(f"delay: {meta.delay}")
             print(f"full_range: {meta.full_range}")
@@ -410,7 +416,7 @@ def unp_file_reader(path):
         return [(None,)]
 
     if meta.pattern == "Sine_Pause":
-        display, display_hires = process_unp_sine_pause(Path(path), meta)
+        display, display_hires = process_unp_sine_pause(Path(path), meta, include_hires_in_lowres=meta.include_hires)
         _, tail = ospath.split(path)
         file_name = tail.split(".")[0]
         add_kwargs = {"name": file_name}

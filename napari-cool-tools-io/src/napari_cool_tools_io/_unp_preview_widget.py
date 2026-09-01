@@ -20,6 +20,10 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         self.setWindowTitle("UNP Preview Dialog")
         self.dcSubtractCheckBox.setChecked(True)
         self.doubleSideCheckBox.setChecked(True)
+        self.dualAscanCheckBox.setChecked(True)
+        self.hiResInLoRescheckBox.setChecked(True)
+        self.hiResInLoRescheckBox.setEnabled(False)
+        self.hiResInLoRescheckBox.hide()
 
         self.OCTACheckBox.setEnabled(False)
         self.OCTAComboBox.setEnabled(False)
