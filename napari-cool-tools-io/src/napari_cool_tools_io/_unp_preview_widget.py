@@ -21,7 +21,7 @@ class Unp_Preview_Widget(QDialog, Ui_Dialog):
         self.dcSubtractCheckBox.setChecked(True)
         self.doubleSideCheckBox.setChecked(True)
         self.dualAscanCheckBox.setChecked(True)
-        self.hiResInLoRescheckBox.setChecked(True)
+        self.hiResInLoRescheckBox.setChecked(False)
         self.hiResInLoRescheckBox.setEnabled(False)
         self.hiResInLoRescheckBox.hide()
 

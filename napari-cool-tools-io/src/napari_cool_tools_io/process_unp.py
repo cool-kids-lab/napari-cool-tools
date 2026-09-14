@@ -302,7 +302,7 @@ def cal_cost_function_torch(data: torch.Tensor, maxDispOrders, arrCountDispCoeff
     
     # Avoid edges
     # roi_oct = toct[:, 50 : int(data_disp_comp.shape[1] / 2) - 50]#this is the positive half
-    roi_oct = toct[50:-50, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
+    roi_oct = toct[:, int(data_disp_comp.shape[1] / 2) + 50 : -50] #take the negative part
     
     # Normalize
     norm_oct = roi_oct / torch.sum(roi_oct)
@@ -700,6 +700,9 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
 
     show_info("Starting unp file processing.")
 
+    if include_hires_in_lowres:
+        print("Including hires frames in low res volume.")
+
     indices = meta.sine_frame_indices
     pause_index = indices[0::2]
 
@@ -745,9 +748,7 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
 
         dispMaxOrder = 3
 
-        #TODO this function does not include autodispersion yet. It should be added in the future, but for now we can just use the same coefficients as the low-res frames.
-        #Will add this function in the future for batch processing
-
+        #TODO 
         # auto dispersion (does not support split dispersion yet, only calculates c2 and c3 for the whole volume, global mode)
         #this is for experimental only
         if auto_dispersion:
@@ -1014,10 +1015,15 @@ def process_unp_sine_pause(unp_file_path:Path, meta: unp_meta, include_hires_in_
     if include_hires_in_lowres:
         target_size = oct_vol_array[0].shape
         for i in range(len(pause_index)):
-            idx = pause_index[i] - i*hires_d*hires_ratio + i
-            temp_frame = oct_vol_array_hires[i*hires_d].unsqueeze(0)
-            temp_frame = F.interpolate(temp_frame.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
-            oct_vol_array = torch.cat((oct_vol_array[:idx], temp_frame, oct_vol_array[idx:]), dim=0)
+            idx = pause_index[i] - i*hires_d*hires_ratio + 2*i #the last term is to account for the 2nd and 5th high-res frames that will be added to the low-res volume, so we need to shift the index by 2 for each pause index
+
+            #add the 2nd and 5th high-res frames into the low-res volume, after resizing to match the low-res frame size
+            temp_frame1 = oct_vol_array_hires[i*hires_d ].unsqueeze(0) #take the first and fourth high-res frames (0 and 3) for the low-res volume
+            temp_frame2 = oct_vol_array_hires[i*hires_d + 3].unsqueeze(0)
+            
+            temp_frame1 = F.interpolate(temp_frame1.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
+            temp_frame2 = F.interpolate(temp_frame2.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
+            oct_vol_array = torch.cat((oct_vol_array[:idx], temp_frame1, temp_frame2, oct_vol_array[idx:]), dim=0)
 
     oct_vol_array, oct_vol_array_hires = oct_vol_array.cpu().numpy(), oct_vol_array_hires.cpu().numpy()
 
