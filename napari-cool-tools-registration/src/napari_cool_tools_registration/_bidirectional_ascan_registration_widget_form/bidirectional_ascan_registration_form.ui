@@ -670,38 +670,22 @@
          <enum>QFrame::NoFrame</enum>
         </property>
         <layout class="QGridLayout" name="gridLayout_13">
-         <item row="3" column="0">
-          <widget class="QCheckBox" name="cropCheckBox">
-           <property name="text">
-            <string>Crop</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QComboBox" name="splitModeComboBox">
-           <item>
-            <property name="text">
-             <string>Dual</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>Quad</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QCheckBox" name="flipABCheckBox">
-           <property name="text">
-            <string>Flip A/B</string>
-           </property>
-          </widget>
-         </item>
          <item row="0" column="0">
           <widget class="QCheckBox" name="desineCheckBox">
            <property name="text">
             <string>Desine</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QLabel" name="label_11">
+           <property name="font">
+            <font>
+             <underline>true</underline>
+            </font>
+           </property>
+           <property name="text">
+            <string>Split Mode</string>
            </property>
           </widget>
          </item>
@@ -715,15 +699,38 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_11">
-           <property name="font">
-            <font>
-             <underline>true</underline>
-            </font>
-           </property>
+         <item row="6" column="0">
+          <widget class="QComboBox" name="splitModeComboBox">
+           <item>
+            <property name="text">
+             <string>Dual</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Quad</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QCheckBox" name="flipABCheckBox">
            <property name="text">
-            <string>Split Mode</string>
+            <string>Flip A/B</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QCheckBox" name="cropCheckBox">
+           <property name="text">
+            <string>Crop</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QCheckBox" name="doubleSideCheckBox">
+           <property name="text">
+            <string>Double Side</string>
            </property>
           </widget>
          </item>

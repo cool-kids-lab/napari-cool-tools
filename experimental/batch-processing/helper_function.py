@@ -1,4 +1,6 @@
 
+import os
+from multiprocessing import Pool
 from pathlib import Path
 from napari_cool_tools_io import getWindow, unp_meta
 import numpy as np
@@ -247,13 +249,13 @@ def process_unp_sine_pause_batch_haoshen(unp_file_path:Path, meta: unp_meta, inc
         oct_vol_array = desine(oct_vol_array, mode="bilinear", transpose=False, scale_fac=2)
         oct_vol_array_hires = desine(oct_vol_array_hires, mode="bilinear", transpose=False, scale_fac=2)
 
-    # if include_hires_in_lowres:
-    #     target_size = oct_vol_array[0].shape
-    #     for i in range(len(pause_index)):
-    #         idx = pause_index[i] - i*hires_d*hires_ratio + i
-    #         temp_frame = oct_vol_array_hires[i*hires_d].unsqueeze(0)
-    #         temp_frame = F.interpolate(temp_frame.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
-    #         oct_vol_array = torch.cat((oct_vol_array[:idx], temp_frame, oct_vol_array[idx:]), dim=0)
+    if include_hires_in_lowres:
+        target_size = oct_vol_array[0].shape
+        for i in range(len(pause_index)):
+            idx = pause_index[i] - i*hires_d*hires_ratio + i
+            temp_frame = oct_vol_array_hires[i*hires_d].unsqueeze(0)
+            temp_frame = F.interpolate(temp_frame.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
+            oct_vol_array = torch.cat((oct_vol_array[:idx], temp_frame, oct_vol_array[idx:]), dim=0)
    
     for idx, pause_idx in enumerate(pause_index):
         insert_idx = pause_idx - idx*hires_d*hires_ratio - 1
@@ -261,8 +263,10 @@ def process_unp_sine_pause_batch_haoshen(unp_file_path:Path, meta: unp_meta, inc
             oct_vol_array_lowres_pre[idx*hires_d + i] = oct_vol_array[insert_idx]
             oct_vol_array_lowres_post[idx*hires_d + i] = oct_vol_array[insert_idx+1]
 
-    oct_vol_array = oct_vol_array.cpu().numpy()
-    oct_vol_array_hires = oct_vol_array_hires.cpu().numpy()
+    oct_vol_array = oct_vol_array.cpu().numpy() #this is the main low-res volume
+    oct_vol_array_hires = oct_vol_array_hires.cpu().numpy() #this is the high-res volume
+
+    #this is just for haoshen, he wants to see the low-res pre and post frames for each pause frame, so we will return them as well
     oct_vol_array_lowres_pre = oct_vol_array_lowres_pre.cpu().numpy()
     oct_vol_array_lowres_post = oct_vol_array_lowres_post.cpu().numpy()
 
@@ -273,3 +277,211 @@ def process_unp_sine_pause_batch_haoshen(unp_file_path:Path, meta: unp_meta, inc
     print("Finished unp file processing.")
     
     return oct_vol_array_lowres_pre, oct_vol_array_lowres_post, oct_vol_array_hires
+
+
+
+from skimage.registration import optical_flow_ilk, phase_cross_correlation
+from skimage.transform import warp
+from scipy.ndimage import shift as ndimage_shift
+
+def optical_flow_registration(img: np.ndarray, img2: np.ndarray, row_coords: np.ndarray, col_coords: np.ndarray) -> np.ndarray:
+    """Computes optical flow and warps img2 to match img."""
+    # row, col = img.shape  # Fixed: extracted variables correctly from shape
+    
+    # Compute optical flow
+    v, u = optical_flow_ilk(img, img2) #ilk is better than tvl1
+    
+    # Register coordinates
+    # row_coords, col_coords = np.meshgrid(np.arange(row), np.arange(col), indexing="ij")
+    flow_warp = warp(img2, np.array([row_coords + v, col_coords + u]), mode="edge")
+    
+    return flow_warp
+
+
+def phase_correlation_registration(ref: np.ndarray, moving: np.ndarray, row_coords: np.ndarray, col_coords: np.ndarray) -> np.ndarray:
+
+    #Calculate the translation using phase cross-correlation
+    detected_shift, _, _ = phase_cross_correlation(
+        ref, 
+        moving
+    )
+
+    corrected_image = ndimage_shift(moving, detected_shift, mode='constant', cval=0)
+
+    return corrected_image
+
+
+
+
+# def optical_flow_registration(active: np.ndarray) -> np.ndarray:
+#     """Registers a sequence of images to the first frame and returns the average."""
+#     if active.ndim != 3:
+#         raise ValueError("active must have shape (frames, height, width)")
+
+#     registered = np.empty_like(active)
+#     registered[0] = active[0].copy()  # Keep the reference frame intact
+
+#     total_frames = active.shape[0] - 1
+#     if total_frames <= 0:
+#         return registered[0].copy()
+
+#     reference = active[0]
+
+#     references = np.expand_dims(reference, axis=0)
+#     references = np.repeat(references, total_frames, axis=0)
+
+#     #prepare the mashgrid for the optical flow registration
+#     row, col = reference.shape
+#     row_coord, col_coord = np.meshgrid(np.arange(row), np.arange(col), indexing="ij")
+
+#     row_coords = np.expand_dims(row_coord, axis=0)
+#     col_coords = np.expand_dims(col_coord, axis=0)
+
+#     row_coords = np.repeat(row_coords, total_frames, axis=0)
+#     col_coords = np.repeat(col_coords, total_frames, axis=0)
+
+#     tasks = []
+#     for ref, frame, row_coord, col_coord in zip(references, active[1:], row_coords, col_coords):
+#         tasks.append((ref, frame, row_coord, col_coord))
+
+#     with Pool(processes=min(8, max(1, (os.cpu_count() or 1)))) as pool:
+#         results = pool.starmap(opti_flow_internal, tasks)
+
+#     for i, result in enumerate(results):
+#         registered[i + 1] = result
+#         print(f"Index: {i} of {total_frames} registered.")
+
+#     print("Optical flow registration complete.")
+
+#     reg_out = registered.mean(axis=0)
+#     return reg_out
+
+# def optical_flow_registration_low_hi(low: np.ndarray, high: np.ndarray) -> np.ndarray:
+#     '''Registers a sequence of low-resolution images to high-resolution images and returns the registered low-resolution images.'''
+
+#     # both low and high should have shape (frames, height, width)
+#     if low.shape != high.shape:
+#         raise ValueError(
+#             f"low and high must have the same shape (frames, height, width), "
+#             f"low shape: {low.shape}, high shape: {high.shape}"
+#         )
+
+#     print(f"Registering {low.shape[0]} low-resolution frames to high-resolution frames.")
+
+#     registered = np.empty_like(high)
+
+#     #prepare the mashgrid for the optical flow registration
+#     _, row, col = registered.shape
+#     row_coord, col_coord = np.meshgrid(np.arange(row), np.arange(col), indexing="ij")
+
+#     row_coords = np.expand_dims(row_coord, axis=0)
+#     col_coords = np.expand_dims(col_coord, axis=0)
+
+#     row_coords = np.repeat(row_coords, registered.shape[0], axis=0)
+#     col_coords = np.repeat(col_coords, registered.shape[0], axis=0)
+
+#     tasks = [
+#         (ref, frame, row_coord, col_coord)
+#         for ref, frame, row_coord, col_coord in zip(low, high, row_coords, col_coords)
+#     ]
+
+#     with Pool(processes=4) as pool:
+#         results = pool.starmap(opti_flow_internal, tasks)
+
+#     for i, result in enumerate(results):
+#         registered[i] = result
+#         # print(f"Index: {i} of {len(high)} registered.")
+
+#     print("Optical flow registration complete.")
+
+#     return registered
+
+# import cv2
+
+# def optical_flow_registration_cuda(active: np.ndarray) -> np.ndarray:
+#     """Registers a sequence of images to the first frame using OpenCV CUDA 
+
+#     and returns the average image. Input 'active' shape: (Frames, Height, Width).
+#     """
+#     total_frames = active.shape[0] - 1
+#     num_frames, row, col = active.shape
+
+#     # 1. Initialize the GPU Lucas-Kanade Dense solver
+#     # gpu_lk = cv2.cuda.FarnebackOpticalFlow.create(
+#     #     winSize=(15, 15), maxLevel=3, iters=5
+#     # )
+
+#     gpu_lk = cv2.cuda.FarnebackOpticalFlow.create(
+#         numLevels=3, 
+#         pyrScale=0.5, 
+#         fastPyramids=False, 
+#         winSize=13, 
+#         numIters=10, 
+#         polyN=5, 
+#         polySigma=1.1, 
+#         flags=0
+#     )
+
+#     # 2. Pre-allocate static GPU memory buffers to avoid memory churn
+#     gpu_ref = cv2.cuda_GpuMat()
+#     gpu_mov = cv2.cuda_GpuMat()
+#     gpu_flow = cv2.cuda_GpuMat()
+#     gpu_warped = cv2.cuda_GpuMat()
+
+#     # Create the baseline coordinate meshgrid once on the CPU
+#     grid_x, grid_y = np.meshgrid(np.arange(col, dtype=np.float32), np.arange(row, dtype=np.float32))
+    
+#     # Pre-allocate GPU mats for the remap coordinate lookup tables
+#     gpu_map_x = cv2.cuda_GpuMat()
+#     gpu_map_y = cv2.cuda_GpuMat()
+
+#     # 3. Upload the base reference frame (index 0) to the GPU
+#     # OpenCV algorithms expect data of type float32 or uint8
+#     ref_frame_f32 = active[0].astype(np.float32)
+#     gpu_ref.upload(ref_frame_f32)
+
+#     # Initialize the output array on the CPU
+#     registered = np.empty_like(active)
+#     registered[0] = active[0].copy()
+
+#     # 4. Process the remaining sequence in the loop
+#     for i in range(1, num_frames):
+#         mov_frame_f32 = active[i].astype(np.float32)
+#         gpu_mov.upload(mov_frame_f32)
+
+#         # Compute optical flow on the GPU (returns a 2-channel matrix of displacement vectors)
+#         gpu_lk.calc(gpu_ref, gpu_mov, gpu_flow)
+
+#         print(gpu_flow.size(), gpu_flow.type())  # Debug: Check the size and type of the flow matrix
+
+#         # Split the 2-channel flow vector matrix into separate X (u) and Y (v) components
+#         # gpu_flow_x, gpu_flow_y = cv2.cuda.split(gpu_flow)
+
+#         gpu_flow_x = cv2.cuda_GpuMat(gpu_flow.size(), cv2.CV_32FC1)
+#         gpu_flow_y = cv2.cuda_GpuMat(gpu_flow.size(), cv2.CV_32FC1)
+
+#         cv2.cuda.split(gpu_flow, [gpu_flow_x, gpu_flow_y])
+
+#         # Update lookup tables: New coordinate = Base Meshgrid + Displacement Flow Vector
+#         # Note: OpenCV maps X-flow (u) to columns and Y-flow (v) to rows
+#         cv2.cuda.add(gpu_flow_x, grid_x, gpu_map_x)
+#         cv2.cuda.add(gpu_flow_y, grid_y, gpu_map_y)
+
+#         # Warp the image directly on the GPU using remap
+#         # BORDER_REPLICATE acts exactly like skimage's mode="edge"
+#         cv2.cuda.remap(
+#             gpu_mov, 
+#             gpu_map_x, 
+#             gpu_map_y, 
+#             interpolation=cv2.INTER_LINEAR, 
+#             borderMode=cv2.BORDER_REPLICATE, 
+#             dst=gpu_warped
+#         )
+
+#         # Download the final registered frame back to the CPU
+#         registered[i] = gpu_warped.download()
+#         print(f"Index: {i} of {total_frames} registered.")
+
+#     # Compute the average over the sequence
+#     reg_out = registered.mean(axis=0)
+#     return reg_out

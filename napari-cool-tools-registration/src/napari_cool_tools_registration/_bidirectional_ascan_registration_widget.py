@@ -4,77 +4,19 @@ from napari_cool_tools_registration._bidirectional_ascan_registration_form impor
 import pyqtgraph as pg
 import numpy as np
 import torch
-import torch.nn.functional as F
 from tqdm import tqdm
+import torch.nn.functional as F
 from napari_cool_tools_oct_preproc._oct_preproc_func import desine
 from napari_cool_tools_io import device
 import napari_cool_tools_io
-
-def blur_score_vol_torch_frequency(img: torch.Tensor):
-    """
-    Edge magnitude via frequency-domain derivatives.
-    img: (H, W) real tensor (any float dtype); returns a scalar score (sum of magnitudes).
-    """
-    assert img.ndim == 2, "Input must be 2D (H, W)."
-
-    # #avoid top edges
-    # img[:10,:] = 0
-    # img[-10:,:] = 0
-
-    H, W = img.shape
-    device, dtype = img.device, img.dtype
-
-    # 1) FFT (no fftshift)
-    F = torch.fft.fft2(img)
-
-    # 2) Frequency coordinates shaped (H, W)
-    u = torch.fft.fftfreq(W, d=1.0, device=device, dtype=dtype)   # (W,)
-    v = torch.fft.fftfreq(H, d=1.0, device=device, dtype=dtype)   # (H,)
-    V, U = torch.meshgrid(v, u, indexing='ij')                    # both (H, W)
-
-    # 3) Derivative filters: j*2*pi*f
-    Hx = torch.complex(torch.zeros_like(U), 2 * torch.pi * U)     # (H, W) complex
-    Hy = torch.complex(torch.zeros_like(V), 2 * torch.pi * V)
-
-    # 4) Apply filters in frequency
-    Fx = F * Hx
-    Fy = F * Hy
-
-    # 5) Inverse FFT to spatial gradients
-    edge_x = torch.fft.ifft2(Fx).real
-    edge_y = torch.fft.ifft2(Fy).real
-
-    # 6) Gradient magnitude + a simple score
-    edge_mag = torch.hypot(edge_x, edge_y)                        # sqrt(x^2 + y^2)
-    score = edge_mag.abs().sum()                                  # torch scalar
-
-    return score
-
-def blur_score_vol_torch_spatial(x: torch.Tensor) -> torch.Tensor:
-    """
-    Sum of absolute Laplacian (higher => sharper).
-    Returns a *torch scalar* (zero-dim tensor) on the same device, float64.
-
-    I: (H,W) or (D,H,W). For 3D, applies 2D Laplacian per slice.
-    """
-    # assert I.ndim in (2, 3), "I must be (H,W) or (D,H,W)"
-    # x = I.to(torch.float64)
-
-    # Shape to (N,1,H,W) for conv2d
-    x4 = x.unsqueeze(0).unsqueeze(0) if x.ndim == 2 else x.unsqueeze(1)
-
-    # 3x3 Laplacian kernel
-    h = torch.tensor([[0., 1., 0.],
-                      [1., -4., 1.],
-                      [0., 1., 0.]], dtype=x.dtype, device=x.device).view(1,1,3,3)
-
-    # replicate-pad edges (nearest) then conv
-    xpad = F.pad(x4, (1, 1, 1, 1), mode='replicate')
-    L = F.conv2d(xpad, h)  # (N,1,H,W)
-
-    # Sum of absolute Laplacian -> torch scalar
-    score = L.abs().sum()
-    return score
+from napari_cool_tools_registration._bidirectional_ascan_registration_funcs import (
+    unwarp_polynomial_offset_torch,
+    unwarp_polynomial_linear_torch,
+    unwarp_polynomial_unified_torch,
+    process_image_no_plot_torch,
+    blur_score_vol_torch_spatial,
+    blur_score_vol_torch_frequency
+)
 
 class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
     def __init__(self, parent=None):
@@ -115,6 +57,7 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.minSpinBox.valueChanged.connect(self.updateImage)
         self.desineCheckBox.stateChanged.connect(self.updateImage)
         self.enableCheckBox.stateChanged.connect(self.updateImage)
+        self.doubleSideCheckBox.stateChanged.connect(self.updateImage)
         self.flipABCheckBox.stateChanged.connect(self.updateImage)
         self.dualEdgeCheckBox.stateChanged.connect(self.updateImage)
         self.linearInterpCheckBox.stateChanged.connect(self.updateImage)
@@ -142,6 +85,7 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.updateImage()
 
     def updateImage(self):
+        #TODO so far this function only works on normal OCT. it will not work on OCTA. I don't know why yet. I will fix it later.
 
         if self.volume is None:
             return
@@ -163,24 +107,26 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
 
             if self.inverseCheckBox.isChecked():
                 bscan = bscan[::-1,:]
-
+          
             AA, BB = (0, 1)
-            split = 2
 
             if self.flipABCheckBox.isChecked():
-                if current_idx % 2:
-                    AA, BB = (1, 0)
+                AA, BB = np.flip((AA, BB))
 
-            if self.splitModeComboBox.currentIndex() == 1:
-                AA, BB = 2*AA, 2*BB
-                split = 4
+            split = 2 #this is to handle the split mode, if split mode is 1, then we will have 4 splits, otherwise we will have 2 splits
+
+            if self.doubleSideCheckBox.isChecked():#this means the AB is alternating
+                cframe = int(np.floor(current_idx/self.bmscanSpinBox.value())) #this will handle bmscan
+
+                if (cframe % 2):
+                    AA, BB = np.flip((AA, BB))
+
+            # print(f"Split mode: {self.splitModeComboBox.currentIndex()}")
+            # if self.splitModeComboBox.currentIndex() == 1:
+            #     AA, BB = 2*AA, 2*BB
+            #     split = 4
 
             new_image_torch = torch.from_numpy(bscan.copy()).to(device=device)
-
-            #TODO handle double side images
-            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
-            if (cframe % 2):
-                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             if self.linearInterpCheckBox.isChecked():
                 mode = "bilinear"
@@ -196,41 +142,34 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
                 scales = torch.as_tensor(scales, dtype=torch.float64, device=device)
 
                 new_image_1 = new_image_torch[:,AA::split]
-                new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_torch[:,AA::split] = new_image_1
 
-                if self.splitModeComboBox.currentIndex() == 1:
-                    new_image_1 = new_image_torch[:,AA+1::split]
-                    new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_torch[:,AA+1::split] = new_image_1
+                # if self.splitModeComboBox.currentIndex() == 1:
+                #     new_image_1 = new_image_torch[:,AA+1::split]
+                #     new_image_1 = unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_1 = unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_1 = unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_torch[:,AA+1::split] = new_image_1
 
                 if self.dualEdgeCheckBox.isChecked():
                     new_image_2 = new_image_torch[:,BB::split]
-                    # coeffs = -1.0*coeffs
-                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
-                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
-                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    new_image_2 = unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    new_image_2 = unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    new_image_2 = unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
                     new_image_torch[:,BB::split] = new_image_2
 
-                    if self.splitModeComboBox.currentIndex() == 1:
-                        new_image_2 = new_image_torch[:,BB+1::split]
-                        # coeffs = -1.0*coeffs
-                        new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
-                        new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
-                        new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
-                        new_image_torch[:,BB+1::split] = new_image_2
+                    # if self.splitModeComboBox.currentIndex() == 1:
+                    #     new_image_2 = new_image_torch[:,BB+1::split]
+                    #     new_image_2 = unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    #     new_image_2 = unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    #     new_image_2 = unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    #     new_image_torch[:,BB+1::split] = new_image_2
 
             if self.desineCheckBox.isChecked():
                 new_image_torch = desine(new_image_torch, transpose=False, scale_fac=1)
-
-            #TODO handle double side images
-            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
-            if (cframe % 2):
-                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             new_image = new_image_torch.cpu().numpy()
 
@@ -274,62 +213,54 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
 
             # Default
             AA, BB = (0, 1)
-            split = 2
 
             if self.flipABCheckBox.isChecked():
-                if current_idx % 2: #TODO handle bmscan
-                    AA, BB = (1, 0)
+                AA, BB = np.flip((AA, BB))
 
-            if self.splitModeComboBox.currentIndex() == 1:
-                AA, BB = 2*AA, 2*BB
-                split = 4
+            split = 2
 
+            if self.doubleSideCheckBox.isChecked():
+                cframe = int(np.floor(current_idx/self.bmscanSpinBox.value())) #this will handle bmscan
+                if cframe % 2:
+                    AA, BB = np.flip((AA, BB))
+
+            # if self.splitModeComboBox.currentIndex() == 1:#TODO fix for split mode
+            #     AA, BB = 2*AA, 2*BB
+            #     split = 4
 
             new_image_torch = torch.from_numpy(bscan.copy()).to(device=device)
-
-            #TODO handle double side images
-            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
-            if (cframe % 2):
-                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             if self.enableCheckBox.isChecked():
 
                 new_image_1 = new_image_torch[:,AA::split]
-                new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
-                new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                new_image_1 = unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
                 new_image_torch[:,AA::split] = new_image_1
 
-                if self.splitModeComboBox.currentIndex() == 1:
-                    new_image_1 = new_image_torch[:,AA+1::split]
-                    new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
-                    new_image_torch[:,AA+1::split] = new_image_1
+                # if self.splitModeComboBox.currentIndex() == 1:
+                #     new_image_1 = new_image_torch[:,AA+1::split]
+                #     new_image_1 = unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_1 = unwarp_polynomial_linear_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_1 = unwarp_polynomial_unified_torch(new_image_1, coeffs, scales, mode=mode)
+                #     new_image_torch[:,AA+1::split] = new_image_1
 
                 if self.dualEdgeCheckBox.isChecked():
                     new_image_2 = new_image_torch[:,BB::split]
-                    # coeffs = -1.0*coeffs
-                    new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
-                    new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
-                    new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    new_image_2 = unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    new_image_2 = unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    new_image_2 = unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
                     new_image_torch[:,BB::split] = new_image_2
 
-                    if self.splitModeComboBox.currentIndex() == 1:
-                        new_image_2 = new_image_torch[:,BB+1::split]
-                        # coeffs = -1.0*coeffs
-                        new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
-                        new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
-                        new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
-                        new_image_torch[:,BB+1::split] = new_image_2
+                    # if self.splitModeComboBox.currentIndex() == 1:
+                    #     new_image_2 = new_image_torch[:,BB+1::split]
+                    #     new_image_2 = unwarp_polynomial_offset_torch(new_image_2, -1.0*coeffs, scales, mode=mode)
+                    #     new_image_2 = unwarp_polynomial_linear_torch(new_image_2, -1.0*coeffs, scales,mode=mode)
+                    #     new_image_2 = unwarp_polynomial_unified_torch(new_image_2, -1.0*coeffs,scales, mode=mode)
+                    #     new_image_torch[:,BB+1::split] = new_image_2
 
             if self.desineCheckBox.isChecked():
                 new_image_torch = desine(new_image_torch,transpose=False)
-
-            #TODO handle double side images
-            cframe = int(np.floor(current_idx/self.bmscanSpinBox.value()))
-            if (cframe % 2):
-                new_image_torch = torch.flip(new_image_torch, dims=[0])
 
             new_image = new_image_torch.cpu().numpy()
 
@@ -356,78 +287,17 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.minSpinBox.setValue(float(vmin))
         self.maxSpinBox.setValue(float(vmax))
 
-
-    def UnwarpPolynomialUnified(self, frameData: np.ndarray, coeffs, scales,
-                                centered: bool = False
-                                ) -> np.ndarray:
-        """
-        Python version of MATLAB's UnwarpPolynomialNonLinear.
         
-        Parameters
-        ----------
-        frameData : 2D np.ndarray
-            Input image [h, w]
-        coeffs : list or np.ndarray
-            Polynomial coefficients [c0, c1, c2, c3]
-        
-        Returns
-        -------
-        result : 2D np.ndarray
-            Warped image with bilinear interpolation
-        """
-        h, w = frameData.shape
-
-        # Normalized Y input from 0 to 1
-        y_input = np.linspace(-0.5, 0.5, w) if centered else np.linspace(0, 1, w) # type: ignore
-
-        sc0 = scales[0]
-        sc1 = scales[1]
-        sc2 = scales[2]
-        sc3 = scales[3]
-
-        # Apply offset
-        offset = sc0 * coeffs[0] / w
-        y_input = y_input + offset
-
-        # Apply linear scaling
-        linear_scale = (w + (coeffs[1] * sc1)) / w
-
-        # Polynomial warp
-        y_warp = (
-            linear_scale * y_input
-            + (coeffs[2] / sc2) * y_input * np.abs(y_input)
-            + (coeffs[3] / sc3) * y_input**3
-        )
-
-        # Normalize back to 0..1
-        y_warp_norm = (y_warp - y_warp.min()) / (y_warp.max() - y_warp.min())
-
-        # Map to pixel indices
-        y_idx = y_warp_norm * (w - 1)
-
-        # --- Interpolation (bilinear like MATLAB's interp2) ---
-        xx = np.arange(h) #840
-        yy = np.arange(w) #800
-        interpolator = RegularGridInterpolator(
-            (xx, yy), frameData, method="linear", bounds_error=False, fill_value=0
-        )
-
-        x_grid, y_grid = np.meshgrid(xx, y_idx, indexing='ij')
-
-        # Points to sample (N, 2)
-        pts = np.column_stack([x_grid.ravel(), y_grid.ravel()])
-        result = interpolator(pts).reshape(h, w)
-
-        return result
-    
-
     def autoFindCoeffs(self):
+        #This is now support BMSCAN, but the user need to decide manually wether the image is double side or not.
+        #This will only works on VISTA BMScan!!!!!!!!!!!
+        #if this is non vista, it will be considered normal OCT. not OCTA!!!
 
         if self.volume is None:
             return
 
         idx1 = self.frameNumSpinBox.value()
-        idx2 = idx1 + 1
+        idx2 = idx1 + 1 #the next frame
 
         if idx2 >= self.volume.shape[0]:
             idx1 = idx1 - 1
@@ -447,8 +317,6 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         device = image1.device
 
         ranges = self.rangeSpinBox.value()
-
-        flipAB = [0,1]
 
         c0_range = [0.0]
         c1_range = [0.0]
@@ -482,13 +350,10 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         if self.C3CheckBox.isChecked():
             c3_range = np.arange(-ranges, ranges, 1, dtype=np.float32)*step_size + c3_current
 
-        total_iterations = (
-            len(c0_range) * len(c1_range) * len(c2_range) * len(c3_range) * len(flipAB)
-        )
+        total_iterations = len(c0_range) * len(c1_range) * len(c2_range) * len(c3_range)
 
         best_score = 0
         best_coeffs = torch.as_tensor([c0_current, c1_current, c2_current, c3_current], dtype=dtype, device=device)
-        best_flip = 0
 
         sc0 = float(self.C0ScaleComboBox.currentText())
         sc1 = float(self.C1ScaleComboBox.currentText())
@@ -500,11 +365,28 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
             mode = "bilinear"
         else:
             mode = "nearest"
-        
+
         AA, BB = (0, 1)
-        # initialize score
-        new_image_torch1 = self.processImageNoPlot_torch(image1,best_coeffs,scales,AA=AA,BB=BB,mode=mode)
-        new_image_torch2 = self.processImageNoPlot_torch(image2,best_coeffs,scales,AA=AA,BB=BB,mode=mode)
+
+        if self.flipABCheckBox.isChecked():
+            AA, BB = np.flip((AA, BB))
+
+
+        AA1, BB1 = (AA, BB)
+        AA2, BB2 = (AA, BB)
+
+        if self.doubleSideCheckBox.isChecked():#this means the AB is alternating
+            #if the frame is odd, flip (if they are in the same group, they may be both flipped)
+            cframe1 = int(np.floor(idx1/self.bmscanSpinBox.value())) #this will handle bmscan
+            if cframe1 % 2:
+                AA1, BB1 = np.flip((AA, BB))
+            cframe2 = int(np.floor(idx2/self.bmscanSpinBox.value())) #this will handle bmscan
+            if cframe2 % 2:
+                AA2, BB2 = np.flip((AA, BB))
+
+        # initialize score #no double side (but inlcude the flip if needed)
+        new_image_torch1 = process_image_no_plot_torch(image1,best_coeffs,scales,AA=AA1,BB=BB1,dual_edge=self.dualEdgeCheckBox.isChecked(),mode=mode)
+        new_image_torch2 = process_image_no_plot_torch(image2,best_coeffs,scales,AA=AA2,BB=BB2,dual_edge=self.dualEdgeCheckBox.isChecked(),mode=mode)
 
         if self.frequencyDomainCheckBox.isChecked():
             blur_score_vol = blur_score_vol_torch_frequency
@@ -515,60 +397,30 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
 
         iteration = 0
         with tqdm(total=total_iterations, desc="Searching coeffs") as pbar:
-            pbar.set_postfix(best_score=best_score,coeffs=best_coeffs, flip_status=0)
+            pbar.set_postfix(best_score=best_score,coeffs=best_coeffs)
 
-            for flip in flipAB:
-                if flip:
+            for c0 in c0_range:
+                for c1 in c1_range:
+                    for c2 in c2_range:
+                        for c3 in c3_range:
+                            iteration += 1
+                            coeffs = torch.as_tensor([c0, c1, c2, c3], dtype=dtype, device=device)
 
-                    if idx1 % 2: #TODO handle bmscan
-                        AA, BB = (1, 0)
-                
-                    for c0 in c0_range:
-                        for c1 in c1_range:
-                            for c2 in c2_range:
-                                for c3 in c3_range:
-                                    iteration += 1
-                                    coeffs = torch.as_tensor([c0, c1, c2, c3], dtype=dtype, device=device)
+                            new_image_torch1 = process_image_no_plot_torch(image1,coeffs,scales,AA=AA1,BB=BB1,dual_edge=self.dualEdgeCheckBox.isChecked(),mode=mode)
+                            new_image_torch2 = process_image_no_plot_torch(image2,coeffs,scales,AA=AA2,BB=BB2,dual_edge=self.dualEdgeCheckBox.isChecked(),mode=mode)
 
-                                    new_image_torch1 = self.processImageNoPlot_torch(image1,coeffs,scales,AA=AA,BB=BB,mode=mode)
-                                    new_image_torch2 = self.processImageNoPlot_torch(image2,coeffs,scales,AA=BB,BB=AA,mode=mode)
+                            score = blur_score_vol(new_image_torch1).item() + blur_score_vol(new_image_torch2).item()
+                            if score < best_score:
+                                best_score = score
+                                best_coeffs =torch.as_tensor([c0, c1, c2, c3], dtype=dtype, device=device)
+                                pbar.set_postfix(
+                                    best_score=best_score,
+                                    coeffs=best_coeffs.cpu().numpy()
+                                )
 
-                                    score = blur_score_vol(new_image_torch1).item() + blur_score_vol(new_image_torch2).item()
-                                    if score < best_score:
-                                        best_score = score
-                                        best_coeffs = [c0, c1, c2, c3]
-                                        best_flip = flip
-                                        pbar.set_postfix(
-                                            best_score=best_score,
-                                            coeffs=best_coeffs, flip_status=best_flip
-                                        )
+                            pbar.update(1)
 
-                                    pbar.update(1)
-                
-                else:
-                    
-                    AA, BB = (0, 1)
-                    
-                    for c0 in c0_range:
-                        for c1 in c1_range:
-                            for c2 in c2_range:
-                                for c3 in c3_range:
-                                    iteration += 1
-                                    coeffs = torch.as_tensor([c0, c1, c2, c3], dtype=dtype, device=device)
-                                    
-                                    new_image_torch1 = self.processImageNoPlot_torch(image1,coeffs,scales,AA=AA,BB=BB,mode=mode)
-                                    new_image_torch2 = self.processImageNoPlot_torch(image2,coeffs,scales,AA=AA,BB=BB,mode=mode)
-                                    score = blur_score_vol(new_image_torch1).item() + blur_score_vol(new_image_torch2).item()
-                                    if score < best_score:
-                                        best_score = score
-                                        best_coeffs = [c0, c1, c2, c3]
-                                        best_flip = flip
-                                        pbar.set_postfix(
-                                            best_score=best_score,
-                                            coeffs=best_coeffs, flip_status=best_flip
-                                        )
-
-                                    pbar.update(1)
+        best_coeffs = best_coeffs.cpu().numpy()
 
         print(f"Best coeffs found: {best_coeffs} with score: {best_score}")
 
@@ -576,167 +428,4 @@ class Bidirectional_Ascan_Registration_Widget(QDialog, Ui_Dialog):
         self.C1SpinBox.setValue(best_coeffs[1])
         self.C2SpinBox.setValue(best_coeffs[2])
         self.C3SpinBox.setValue(best_coeffs[3])
-        self.flipABCheckBox.setChecked(bool(best_flip))
         self.updateImage()
-
-    def processImageNoPlot_torch(self, image: torch.Tensor, coeffs:torch.Tensor, scales:torch.Tensor, 
-                                 AA, BB, mode: str = "bilinear") -> torch.Tensor:
-        
-        new_image_torch = image.clone() # type: ignore
-
-        if self.enableCheckBox.isChecked():
-            new_image_1 = new_image_torch[:,AA::2]
-            new_image_1 = self.unwarp_polynomial_offset_torch(new_image_1, coeffs, scales, mode=mode)
-            new_image_1 = self.unwarp_polynomial_linear_torch(new_image_1, coeffs,scales, mode=mode)
-            new_image_1 = self.unwarp_polynomial_unified_torch(new_image_1,coeffs,scales, mode=mode)
-
-            new_image_torch[:,AA::2] = new_image_1
-            if self.dualEdgeCheckBox.isChecked():
-                new_image_2 = new_image_torch[:,BB::2]
-                coeffs = -1.0*coeffs
-                new_image_2 = self.unwarp_polynomial_offset_torch(new_image_2, coeffs, scales, mode=mode)
-                new_image_2 = self.unwarp_polynomial_linear_torch(new_image_2, coeffs,scales, mode=mode)
-                new_image_2 = self.unwarp_polynomial_unified_torch(new_image_2, coeffs,scales, mode=mode)
-                new_image_torch[:,BB::2] = new_image_2
-
-        return new_image_torch
-
-    def unwarp_polynomial_unified_torch(self,
-        frameData :torch.Tensor ,                     # np.ndarray (H,W) or torch.Tensor (H,W)
-        coeffs:torch.Tensor,                        # list/tuple/1D tensor [c0,c1,c2,c3]
-        scales:torch.Tensor,                        # list/tuple (sc0, sc1, sc2, sc3)
-        mode: str = "bilinear"  # interpolation mode for grid_sample ("bilinear" or "nearest")
-    ) -> torch.Tensor:
-        """
-        PyTorch-optimized equivalent of your UnwarpPolynomialUnified using grid_sample.
-        Warps columns according to the polynomial; rows (y) are identity.
-
-        - Input:  HxW (image), either NumPy or torch
-        - Output: same shape/type policy (see return_numpy_if_numpy_input)
-        """
-        img = frameData
-        dtype, device = img.dtype, img.device
-
-        H, W = img.shape
-
-        y_input = torch.linspace(0.0, 1.0, H, device=device,dtype=dtype)
-        # polynomial
-        y_warp = ( y_input + 
-            + (coeffs[2] * scales[2]) * y_input * y_input.abs()
-            + (coeffs[3] * scales[3]) * (y_input ** 3) # + (coeffs[3] * scales[3]) * (y_input ** 4)
-        )
-
-        # normalize back to [0..1] and map to pixel index [0..W-1]
-        denom = (y_warp.max() - y_warp.min()).clamp_min(1e-12)
-        y_warp_norm = (y_warp - y_warp.min()) / denom
-
-        # ---- build sampling grid for grid_sample ----
-        # grid_sample expects normalized coords in [-1, 1]
-        # x: width axis, y: height axis
-        y_norm = 2.0 * y_warp_norm - 1.0          # shape (H,)
-        x_norm = 2.0 * torch.arange(W, device=device, dtype=dtype) / (W - 1) - 1.0  # shape (W,)
-
-        # make (H, W) grid: rows repeat y, columns repeat x
-        grid_x = x_norm.view(1, W).expand(H, W)
-        grid_y = y_norm.view(H, 1).expand(H, W)
-        grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)      # (1, H, W, 2)
-
-        # ---- sample ----
-        img_bchw = img.view(1, 1, H, W)
-        out = F.grid_sample(
-            img_bchw, grid,
-            mode=mode,
-            padding_mode="zeros",
-            align_corners=True
-        )
-        result = out[0, 0]  # (H, W)
-        return result
-    
-    
-    def unwarp_polynomial_offset_torch(self,
-        frameData :torch.Tensor ,                     # np.ndarray (H,W) or torch.Tensor (H,W)
-        coeffs:torch.Tensor,                        # list/tuple/1D tensor [c0,c1,c2,c3]
-        scales:torch.Tensor,                        # list/tuple (sc0, sc1, sc2, sc3)
-        mode: str = "bilinear"  # interpolation mode for grid_sample ("bilinear" or "nearest")
-    ) -> torch.Tensor:
-        """
-        PyTorch-optimized equivalent of your UnwarpPolynomialUnified using grid_sample.
-        Warps columns according to the polynomial; rows (y) are identity.
-
-        - Input:  HxW (image), either NumPy or torch
-        - Output: same shape/type policy (see return_numpy_if_numpy_input)
-        """
-        img = frameData
-        dtype, device = img.dtype, img.device
-
-        H, W = img.shape
-        offset = 2 * scales[0] * coeffs[0] / H
-
-        # ---- build sampling grid for grid_sample ----
-        # grid_sample expects normalized coords in [-1, 1]
-        # x: width axis, y: height axis
-        x_norm = torch.linspace(-1.0, 1.0, W, device=device,dtype=dtype)
-        y_norm = torch.linspace(-1.0, 1.0, H, device=device,dtype=dtype) + offset #over depth
-
-        # make (H, W) grid: rows repeat y, columns repeat x
-        grid_x = x_norm.view(1, W).expand(H, W)
-        grid_y = y_norm.view(H, 1).expand(H, W)
-        grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)      # (1, H, W, 2)
-
-        # ---- sample ----
-        img_bchw = img.view(1, 1, H, W)
-        out = F.grid_sample(
-            img_bchw, grid,
-            mode=mode,
-            padding_mode="zeros",
-            align_corners=True
-        )
-        result = out[0, 0]  # (H, W)
-        return result
-
-    def unwarp_polynomial_linear_torch(self,
-        frameData :torch.Tensor ,                     # np.ndarray (H,W) or torch.Tensor (H,W)
-        coeffs:torch.Tensor,                        # list/tuple/1D tensor [c0,c1,c2,c3]
-        scales:torch.Tensor,                        # list/tuple (sc0, sc1, sc2, sc3)
-        mode: str = "bilinear"  # interpolation mode for grid_sample ("bilinear" or "nearest")
-    ) -> torch.Tensor:
-        """
-        PyTorch-optimized equivalent of your UnwarpPolynomialUnified using grid_sample.
-        Warps columns according to the polynomial; rows (y) are identity.
-
-        - Input:  HxW (image), either NumPy or torch
-        - Output: same shape/type policy (see return_numpy_if_numpy_input)
-        """
-        img = frameData
-        dtype, device = img.dtype, img.device
-
-        H, W = img.shape
-
-        linear_scale = (H + (coeffs[1] * scales[1])) / H
-
-        y_input = torch.linspace(0.0, 1.0, H, device=device,dtype=dtype)
-        y_warp = linear_scale * y_input
-        y_warp = 2.0 * y_warp - 1.0
-
-        # ---- build sampling grid for grid_sample ----
-        # grid_sample expects normalized coords in [-1, 1]
-        # x: width axis, y: height axis
-        y_norm = y_warp        # shape (H,)
-        x_norm = 2.0 * torch.arange(W, device=device, dtype=dtype) / (W - 1) - 1.0  # shape (W,)
-
-        # make (H, W) grid: rows repeat y, columns repeat x
-        grid_x = x_norm.view(1, W).expand(H, W)
-        grid_y = y_norm.view(H, 1).expand(H, W)
-        grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)      # (1, H, W, 2)
-
-        # ---- sample ----
-        img_bchw = img.view(1, 1, H, W)
-        out = F.grid_sample(
-            img_bchw, grid,
-            mode=mode,
-            padding_mode="zeros",
-            align_corners=True
-        )
-        result = out[0, 0]  # (H, W)
-
-        return result
