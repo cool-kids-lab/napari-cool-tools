@@ -106,7 +106,7 @@ def unwarp_polynomial_offset_torch(
     out = F.grid_sample(
         img_bchw, grid,
         mode=mode,
-        padding_mode="zeros",
+        padding_mode="border",
         align_corners=True
     )
     result = out[0, 0]  # (H, W)
@@ -147,7 +147,7 @@ def unwarp_polynomial_linear_torch(
     out = F.grid_sample(
         img_bchw, grid,
         mode=mode,
-        padding_mode="zeros",
+        padding_mode="border",
         align_corners=True
     )
     result = out[0, 0]  # (H, W)
@@ -194,7 +194,7 @@ def unwarp_polynomial_unified_torch(
     out = F.grid_sample(
         img_bchw, grid,
         mode=mode,
-        padding_mode="zeros",
+        padding_mode="border",
         align_corners=True
     )
     result = out[0, 0]  # (H, W)
