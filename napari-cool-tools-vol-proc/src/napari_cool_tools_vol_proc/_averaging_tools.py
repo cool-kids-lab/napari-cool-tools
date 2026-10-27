@@ -6,6 +6,8 @@ from napari.layers import Image, Layer
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info
 from napari_cool_tools_io import viewer
+from napari_cool_tools_registration.__init__ import RegistrationMode
+from napari_cool_tools_oct_preproc.__init__ import OCTACalc
 
 from napari_cool_tools_vol_proc._averaging_tools_funcs import (
     Implementation,
@@ -51,15 +53,21 @@ def average_bscans_thread(vol: Image, scans_per_avg: int = 3) -> Layer:
 
     return layer
 
-
 def average_per_bscan_plugin(
     vol: Image,
     scans_per_avg: int = 3,
-    axis=0,
-    ensemble: bool = True,
-    gauss: bool = True,
-    trim: bool = False,
-    implementation: Implementation = Implementation.TORCH,
+    registration: bool = False,
+    registration_mode: RegistrationMode = RegistrationMode.Phase_Correlation,
+    OCTA: bool = False,
+    octa_mode: OCTACalc = OCTACalc.STD,
+    kernel_averaging: bool = False,
+    slow_window: int = 3, #lateral window size in z direction
+    fast_window: int = 3, #lateral window size
+    axial_window: int = 3, #axial window size
+    sigma_slow: float = 0.0,
+    sigma_fast: float = 0.0,
+    sigma_axial: float = 0.0,
+    enable_axial_filter: bool = True,
 ):
     """Function averaging every scans_per_avg images/B-scans centered around each image/b-scan.
     Args:
@@ -74,26 +82,39 @@ def average_per_bscan_plugin(
     average_per_bscan_thread(
         vol=vol,
         scans_per_avg=scans_per_avg,
-        axis=axis,
-        trim=trim,
-        implementation=implementation,
-        ensemble=ensemble,
-        gauss=gauss,
+        registration=registration,
+        registration_mode=registration_mode,
+        OCTA=OCTA,
+        octa_mode=octa_mode,
+        kernel_averaging=kernel_averaging,
+        slow_window=slow_window,
+        fast_window=fast_window,
+        axial_window=axial_window,
+        sigma_slow=sigma_slow,
+        sigma_fast=sigma_fast,
+        sigma_axial=sigma_axial,
+        enable_axial_filter=enable_axial_filter
     )
+    
 
-    return
-
-
-@thread_worker(connect={"returned": viewer.add_layer})
+@thread_worker(connect={"yielded": viewer.add_layer})
 def average_per_bscan_thread(
     vol: Image,
     scans_per_avg: int = 3,
-    axis=0,
-    ensemble: bool = True,
-    gauss: bool = True,
-    trim: bool = False,
-    implementation: Implementation = Implementation.TORCH,
-) -> Layer:
+    registration: bool = False,
+    registration_mode: RegistrationMode = RegistrationMode.Phase_Correlation,
+    OCTA: bool = False,
+    octa_mode: OCTACalc = OCTACalc.STD,
+    kernel_averaging: bool = False,
+    slow_window: int = 3, #lateral window size in z direction
+    fast_window: int = 3, #lateral window size
+    axial_window: int = 3, #axial window size
+    sigma_slow: float = 0.0,
+    sigma_fast: float = 0.0,
+    sigma_axial: float = 0.0,
+    enable_axial_filter: bool = True,
+
+):
     """Function averaging every scans_per_avg images/B-scans centered around each image/b-scan.
     Args:
         vol (Image): vol representing volumetric or image stack data
@@ -108,25 +129,33 @@ def average_per_bscan_thread(
     add_kwargs = {"name": name}
     layer_type = "image"
     show_info("Sliding Window B-scan average thread has started")
-    if implementation == Implementation.TORCH:
-        avg_data = average_per_bscan_pt(
-            vol.data,
-            scans_per_avg=scans_per_avg,
-            axis=axis,
-            trim=trim,
-            ensemble=ensemble,
-            gauss=gauss,
-        )
-    elif implementation == Implementation.NUMPY:
-        avg_data = average_per_bscan(
-            vol.data, scans_per_avg=scans_per_avg, axis=axis, trim=trim
-        )
-    else:
-        raise RuntimeError(
-            f"A {implementation.value} version of this function has not been implemented."
-        )
+
+    avg_data, octa_data = average_per_bscan_pt(
+        vol.data,
+        scans_per_avg=scans_per_avg,
+        registration=registration,
+        registration_mode=registration_mode,
+        OCTA=OCTA,
+        octa_mode=octa_mode,
+        kernel_averaging=kernel_averaging,
+        slow_window=slow_window,
+        fast_window=fast_window,
+        axial_window=axial_window,
+        sigma_slow=sigma_slow,
+        sigma_fast=sigma_fast,
+        sigma_axial=sigma_axial,
+        enable_axial_filter=enable_axial_filter
+    )
 
     show_info("Sliding Window B-scan average thread has completed")
-    layer = Layer.create(avg_data, add_kwargs, layer_type)
+    avg_layer = Layer.create(avg_data, add_kwargs, layer_type)
+    yield avg_layer
 
-    return layer
+    if octa_data is not None:
+        octa_name = f"{vol.name}_{scans_per_avg}_octa"
+        octa_add_kwargs = {"name": octa_name}
+        octa_layer_type = "image"
+        octa_layer = Layer.create(octa_data, octa_add_kwargs, octa_layer_type)
+        yield octa_layer
+
+    

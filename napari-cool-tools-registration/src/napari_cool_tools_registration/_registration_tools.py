@@ -11,6 +11,7 @@ from napari.types import ImageData
 from napari.utils.notifications import show_error, show_info
 from napari_cool_tools_io import memory_stats, torch, viewer
 from tqdm import tqdm
+from napari_cool_tools_registration import RegistrationMode
 
 from napari_cool_tools_registration._registration_tools_funcs import (
     ArrayImplementation,
@@ -21,6 +22,12 @@ from napari_cool_tools_registration._registration_tools_funcs import (
     a_scan_subpix_registration,
     adjust_aspect_ratio,
 )
+
+from scipy.ndimage import fourier_shift
+from scipy.ndimage import shift as ndimage_shift
+from skimage.registration import phase_cross_correlation
+from skimage.registration import optical_flow_ilk
+from skimage.transform import warp
 
 
 def adjust_aspect_ratio_plugin(
@@ -699,29 +706,88 @@ def opti_flow_internal(img: ImageData, img2: ImageData, mode: str = "ilk"):
 
     return flow_warp
 
-
 def m_scan_registration(
     vol: Image,
     m_scans: int = 3,
     m_idx: int = 1,
+    mode: RegistrationMode = RegistrationMode.Phase_Correlation,
     subpixel: bool = True,
     debug: bool = False,
 ):
-    """"""
-    data = vol.data
+    """Register repeated m-scan frames within each block of a 3D OCT volume.
+
+    The volume is assumed to be organized as consecutive blocks of size
+    ``m_scans`` along axis 0. For each block, one frame (``m_idx``) is treated
+    as the target and all other frames in the block are registered to it.
+
+    Args:
+        vol: Input napari image layer containing OCT data.
+        m_scans: Number of repeated m-scans per block along axis 0.
+        m_idx: Zero-based index of the target frame within each block.
+        mode: List of registration modes to use.
+        subpixel: If True, use Fourier subpixel shifting; otherwise integer shifts.
+        new_layer: If True, create a new layer for the registered data; otherwise, update the existing layer.
+        debug: If True, emit registration progress and shift info.
+
+    Returns:
+        None. Registration is applied in-place to ``vol.data``.
+    """
+
+    m_scan_registration_thread(
+        vol=vol,
+        m_scans=m_scans,
+        m_idx=m_idx,
+        mode=mode,
+        subpixel=subpixel,
+        debug=debug,
+    )
+
+    return
+
+@thread_worker(connect={"yielded": viewer.add_layer})
+def m_scan_registration_thread(
+    vol: Image,
+    m_scans: int = 3,
+    m_idx: int = 1,
+    mode: RegistrationMode = RegistrationMode.Phase_Correlation,
+    subpixel: bool = True,
+    debug: bool = False,
+):
+    """Register repeated m-scan frames within each block of a 3D OCT volume.
+
+    The volume is assumed to be organized as consecutive blocks of size
+    ``m_scans`` along axis 0. For each block, one frame (``m_idx``) is treated
+    as the target and all other frames in the block are registered to it.
+
+    Args:
+        vol: Input napari image layer containing OCT data.
+        m_scans: Number of repeated m-scans per block along axis 0.
+        m_idx: Zero-based index of the target frame within each block.
+        mode: List of registration modes to use.
+        subpixel: If True, use Fourier subpixel shifting; otherwise integer shifts.
+        debug: If True, emit registration progress and shift info.
+
+    Returns:
+        None. Registration is applied in-place to ``vol.data``.
+    """
+    data = vol.data.copy()
 
     # case 4D OCTA data
     if data.ndim == 4:
-        show_info(f"Not yet implemented {data.ndim}-dimensional data.")
+        print(f"Not yet implemented {data.ndim}-dimensional data.")
         pass
     # case continuous OCTA data
     elif data.ndim == 3:
+        # Collect per-frame registration shifts so we can report a dataset-level summary.
         shifts = []
+        # Process the volume in blocks of m_scans (e.g., 3 repeated m-scans per b-scan).
+
         for b_idx in range(int(data.shape[0] / m_scans)):
             # for b_idx in tqdm(range(int(data.shape[0]/m_scans)),desc="Registering m-scans"):
             curr_idx = b_idx * m_scans
             target_idx = curr_idx + m_idx
 
+            # Build indices to register: all frames in the block except the target index.
             m_idx_set = set(range(m_scans))
             reg_idxs = np.array(list(m_idx_set - {m_idx})) + curr_idx
 
@@ -732,78 +798,73 @@ def m_scan_registration(
             else:
                 pass
 
-            # if curr_idx == 1200:
+            # Apply registration to each frame in the block.
             for i in reg_idxs:
                 if debug:
-                    show_info(f"Registering m-scan{i} to m-scan{target_idx}\n")
+                    print(f"Registering m-scan{i} to m-scan{target_idx}\n")
                 else:
                     pass
-                target_frame = data[curr_idx, :, :]
+                # Choose the fixed target and moving frame, then align moving->target.
+                target_frame = data[target_idx, :, :]
                 reg_frame = data[i, :, :]
                 registered = register_frame_2d(
-                    target_frame, reg_frame, shifts, subpixel=subpixel, debug=debug
+                    target_frame, reg_frame, mode=mode, subpixel=subpixel, debug=debug
                 )
                 data[i, :, :] = registered[:, :]
 
-        shift_data = np.stack(shifts)
-        avg_shift = shift_data.mean(0)
-        # v_shifts = len(shift_data[:,0,:].nonzero())
-        # h_shifts = len(shift_data[:,1,].nonzero())
+        #create new layer with registered data
+        add_kwargs = {"name": f"{vol.name}_m_scan_reg"}
+        layer_type = "image"
 
-        show_info(f"Avg shift: {avg_shift}\n")
+        reg_layer = Layer.create(data, add_kwargs, layer_type)
+        yield reg_layer
 
     # case < 3D data or > 4D data
     elif data.ndim < 3 or data.ndim > 4:
-        show_error(f"Invalid {data.ndim}-dimensional data.")
+        print(f"Invalid {data.ndim}-dimensional data.")
 
 
 def register_frame_2d(
     target_frame: ImageData,
     registering_frame: ImageData,
-    shifts,
+    mode: RegistrationMode = RegistrationMode.Phase_Correlation,
     subpixel: bool = True,
     debug: bool = False,
 ):
-    """"""
-    from scipy.ndimage import fourier_shift
-    from skimage.registration import phase_cross_correlation
 
-    shift, error, diffphase = phase_cross_correlation(
-        target_frame, registering_frame, upsample_factor=100
-    )
+    if mode == RegistrationMode.Phase_Correlation:
+        """"""
 
-    shifts.append(shift)
 
-    if subpixel:
-        if debug:
-            show_info(f"shift: {shift}\n")
+        if subpixel:
+            up_factor = 100
         else:
-            pass
+            up_factor = 10
 
-        input_ = np.fft.fft2(registering_frame)
-        result = fourier_shift(input_, (shift[0], shift[1]), axis=-1)
-        result = np.fft.ifft2(result)
-        reg_shift = result.real
-
-        # viewer.add_image(reg_shift)
-
-    else:
-        shift_h = round(shift[1])
-        shift_w = round(shift[0])
-        shift_h_idx = abs(shift_h)
-        shift_w_idx = abs(shift_w)
+        detected_shift, _, _ = phase_cross_correlation(
+            target_frame, registering_frame, upsample_factor=up_factor
+        )
 
         if debug:
-            print(f"shift: {shift}\nshift_w: {shift_w}\nshift_h: {shift_h}\n")
-        else:
-            pass
+            print(f"shift: {detected_shift}\n")
 
-        if shift_h > 0:
-            reg_shift = np.roll(registering_frame, shift_w, axis=0)
-            reg_shift = np.roll(registering_frame, shift_h, axis=1)
-            reg_shift[-shift_w_idx:, :] = 0
-            reg_shift[:, -shift_h_idx:] = 0
-        else:
-            reg_shift = registering_frame
+        reg_shift = ndimage_shift(registering_frame, detected_shift, mode='constant', cval=0)
 
-    return reg_shift
+        return reg_shift
+
+    if mode == RegistrationMode.Optical_Flow:
+        """"""
+
+
+        v, u = optical_flow_ilk(target_frame, registering_frame)
+
+        row, col = target_frame.shape
+        row_coords, col_coords = np.meshgrid(
+            np.arange(row), np.arange(col), indexing="ij"
+        )
+
+        flow_warp = warp(
+            registering_frame, np.array([row_coords + v, col_coords + u]), mode="edge"
+        )
+
+        return flow_warp

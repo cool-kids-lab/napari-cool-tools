@@ -592,3 +592,26 @@ def adjust_aspect_ratio(
     print(f"GPU memory is clear: {gpu_mem_clear}\n")
 
     return out_vol
+
+def m_scan_registration_func(vol: ImageData, m_scan: int, pixel_search: int = 5) -> ImageData:
+    """ """
+    from skimage.registration import phase_cross_correlation
+
+    vol_out = np.empty_like(vol)
+
+    for i in tqdm(range(vol.shape[0]), desc="M-scan Registration"):
+        m_scan_ref = vol[i, :, m_scan]
+        m_scan_curr = vol[i, :, :]
+
+        shift, error, diffphase = phase_cross_correlation(
+            m_scan_ref, m_scan_curr, upsample_factor=1
+        )
+
+        shift = int(round(shift[1]))
+
+        if abs(shift) > pixel_search:
+            shift = 0
+
+        vol_out[i, :, :] = np.roll(vol[i, :, :], shift, axis=1)
+
+    return vol_out
